@@ -1,0 +1,66 @@
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archivos del IDE/editores
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+.phpintel/
+
+# Archivos de WordPress y temporales
+*.log
+*.sql
+*.sqlite
+wp-config.php
+.htaccess
+.vscode/
+
+# Archivos y carpetas de Composer
+vendor/
+composer.phar
+/vendor/
+
+# Archivos de Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Archivos de PHPUnit
+.phpunit.result.cache
+
+# Archivos de construcción
+build/
+dist/
+
+# Archivos de configuración local
+.env
+.env.*
+!.env.example
+
+# Archivos de respaldo
+*.bak
+*.swp
+*.swo
+*~
+
+# Archivos de cache
+.sass-cache/
+*.css.map
+*.js.map
+
+# Archivos de log
+logs/
+*.log
+
+# Carpetas de datos sensibles
+config/
+data/
+
+# Archivos específicos de este proyecto
+# (Añade aquí cualquier archivo o patrón adicional específico para tu proyecto) 

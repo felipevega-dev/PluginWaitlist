@@ -49,7 +49,7 @@
     $all_email_counts = Waitlist_Model::get_email_subscription_counts();
 
     // Obtener un recuento de los emails y los productos que tienen en lista de espera
-    // Nota: los suscriptores ya vienen paginados de la base de datos
+    // Nota: los suscriptores ya vienen paginados y ordenados de la base de datos
     $email_counts = array();
     foreach ($subscribers as $subscriber) {
         $email = $subscriber->email;
@@ -60,7 +60,8 @@
                 'products' => array(),
                 'ids' => array(),
                 // Obtener el recuento total de productos diferentes desde la base de datos
-                'total_products' => isset($all_email_counts[$email]) ? $all_email_counts[$email] : 0
+                'total_products' => isset($all_email_counts[$email]) ? $all_email_counts[$email] : 0,
+                'product_count' => $subscriber->product_count
             );
         }
         $email_counts[$email]['count']++;
@@ -68,34 +69,18 @@
         $email_counts[$email]['ids'][] = $subscriber->id;
     }
     
-    // Aplicar ordenamiento según los parámetros
-    $orderby = isset($_GET['orderby']) ? sanitize_text_field($_GET['orderby']) : 'products';
-    $order = isset($_GET['order']) ? sanitize_text_field($_GET['order']) : 'desc';
-    
-    uasort($email_counts, function($a, $b) use ($orderby, $order, $email_counts) {
-        if ($orderby === 'products') {
-            // Ordenar por número total de productos diferentes
-            $products_a = $a['total_products'];
-            $products_b = $b['total_products'];
-            $result = $products_a - $products_b;
-        } else if ($orderby === 'email') {
-            // Ordenar por email alfabéticamente
-            $emails_a = key($a);
-            $emails_b = key($b);
-            $result = strcmp($emails_a, $emails_b);
-        } else {
-            // Ordenamiento por defecto (número de suscripciones)
-            $result = $a['count'] - $b['count'];
-        }
-        
-        // Aplicar dirección del ordenamiento
-        return $order === 'asc' ? $result : -$result;
-    });
-    
-    // Usar $email_counts_total para mostrar total de registros 
-    // pero mantener la variable $email_counts solo para los actuales
+    // No necesitamos ordenar manualmente porque ya viene ordenado de la base de datos
     $email_unique_count = count($email_counts);
+    
+    // Mensaje de ordenamiento
+    $orderby_text = $orderby === 'email' ? 'dirección de email' : 'número de productos';
+    $order_text = $order === 'asc' ? 'ascendente' : 'descendente';
     ?>
+    
+    <!-- Mensaje de ordenamiento -->
+    <div class="notice notice-info" style="margin: 15px 0;">
+        <p><strong>Nota:</strong> Los resultados están ordenados por <strong><?php echo $orderby_text; ?></strong> en orden <strong><?php echo $order_text; ?></strong>.</p>
+    </div>
     
     <!-- Tabla de suscriptores -->
     <table class="waitlist-excel-table widefat fixed striped">

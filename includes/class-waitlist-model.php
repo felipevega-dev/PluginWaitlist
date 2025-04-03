@@ -70,31 +70,55 @@ class Waitlist_Model {
     /**
      * Obtiene suscriptores de un producto o todos los suscriptores
      */
-    public static function get_subscribers($product_id = 0, $search = '', $per_page = 0, $page_number = 1) {
+    public static function get_subscribers($product_id = 0, $search = '', $per_page = 0, $page_number = 1, $orderby = 'products', $order = 'desc') {
         global $wpdb;
         $table_name = $wpdb->prefix . 'waitlist';
         
         $subscribers = array();
         
-        // Consulta para obtener emails únicos primero
-        $email_query = "SELECT DISTINCT user_email FROM $table_name WHERE 1=1";
+        // Primero, obtener un recuento de productos por email para ordenación
+        $count_products_query = "
+            SELECT 
+                user_email,
+                COUNT(DISTINCT product_id) as product_count
+            FROM 
+                $table_name
+            GROUP BY 
+                user_email
+        ";
+        
+        $product_counts = array();
+        $email_product_counts = $wpdb->get_results($count_products_query);
+        foreach ($email_product_counts as $count) {
+            $product_counts[$count->user_email] = $count->product_count;
+        }
+        
+        // Consulta para obtener emails únicos con ordenación
+        $email_query = "
+            SELECT 
+                e.user_email,
+                COUNT(DISTINCT e.product_id) as product_count
+            FROM 
+                $table_name e
+            WHERE 1=1
+        ";
         
         $args = array();
         
         // Si hay un ID de producto, filtrar por ese producto
         if ($product_id > 0) {
-            $email_query .= " AND product_id = %d";
+            $email_query .= " AND e.product_id = %d";
             $args[] = $product_id;
         }
         
         // Filtrar por búsqueda si es necesario
         if (!empty($search)) {
-            $email_query .= " AND (user_email LIKE %s";
+            $email_query .= " AND (e.user_email LIKE %s";
             $args[] = '%' . $wpdb->esc_like($search) . '%';
             
             // También buscar en productos por nombre si no se especificó un producto_id
             if ($product_id <= 0) {
-                $email_query .= " OR product_id IN (
+                $email_query .= " OR e.product_id IN (
                     SELECT ID FROM {$wpdb->posts}
                     WHERE post_type IN ('product', 'product_variation')
                     AND post_title LIKE %s
@@ -103,6 +127,17 @@ class Waitlist_Model {
             }
             
             $email_query .= ")";
+        }
+        
+        // Agrupar por email y aplicar ordenación
+        $email_query .= " GROUP BY e.user_email";
+        
+        // Ordenar por número de productos o por email
+        if ($orderby === 'email') {
+            $email_query .= " ORDER BY e.user_email " . ($order === 'asc' ? 'ASC' : 'DESC');
+        } else {
+            // Por defecto ordenar por número de productos
+            $email_query .= " ORDER BY product_count " . ($order === 'asc' ? 'ASC' : 'DESC');
         }
         
         // Contar el total de emails únicos para la paginación
@@ -134,9 +169,6 @@ class Waitlist_Model {
         // Debug - Verificar el total de items
         error_log('Waitlist total unique emails: ' . self::$total_items);
         
-        // Aplicar ordenamiento por email
-        $email_query .= " ORDER BY user_email ASC";
-        
         // Aplicar paginación a los emails únicos
         if ($per_page > 0) {
             $offset = ($page_number - 1) * $per_page;
@@ -146,7 +178,11 @@ class Waitlist_Model {
         }
         
         // Ejecutar la consulta para obtener los emails de esta página
-        $emails = $wpdb->get_col($wpdb->prepare($email_query, $args));
+        $email_results = $wpdb->get_results($wpdb->prepare($email_query, $args));
+        $emails = array();
+        foreach ($email_results as $result) {
+            $emails[] = $result->user_email;
+        }
         
         // Si no hay emails, devolver array vacío
         if (empty($emails)) {
@@ -179,6 +215,7 @@ class Waitlist_Model {
             $subscriber->user_email = $result->user_email;
             $subscriber->email = $result->user_email; // Alias para compatibilidad
             $subscriber->created_at = $result->created_at;
+            $subscriber->product_count = isset($product_counts[$result->user_email]) ? $product_counts[$result->user_email] : 0;
             
             // Obtener información del producto
             $product = wc_get_product($result->product_id);

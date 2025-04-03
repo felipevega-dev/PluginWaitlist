@@ -139,12 +139,16 @@ class Waitlist_Admin {
         // Obtener los filtros
         $search = isset($_GET['search']) ? sanitize_text_field($_GET['search']) : '';
         
+        // Obtener los parámetros de ordenación
+        $orderby = isset($_GET['orderby']) ? sanitize_text_field($_GET['orderby']) : 'products';
+        $order = isset($_GET['order']) ? sanitize_text_field($_GET['order']) : 'desc';
+        
         // Configuración de paginación
         $per_page = 30; // Mostrar 30 suscriptores por página
         $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
         
-        // Obtener los suscriptores según los filtros y la paginación
-        $subscribers = Waitlist_Model::get_subscribers(0, $search, $per_page, $current_page);
+        // Obtener los suscriptores según los filtros, ordenación y la paginación
+        $subscribers = Waitlist_Model::get_subscribers(0, $search, $per_page, $current_page, $orderby, $order);
         
         // Obtener el total de elementos para la paginación
         $total_items = Waitlist_Model::$total_items;

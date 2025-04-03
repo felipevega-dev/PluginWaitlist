@@ -63,7 +63,7 @@
                     <a href="https://www.linkedin.com/in/felipevega-dev/" target="_blank" class="social-link">
                         <span class="dashicons dashicons-linkedin"></span>
                     </a>
-                    <a href="https://github.com/felipevega-dev" target="_blank" class="social-link">
+                    <a href="https://github.com/felipevega-dev" target="_blank" class="social-link2">
                         <img src="<?php echo WAITLIST_PLUGIN_URL . 'assets/img/github.png'; ?>" alt="GitHub" class="social-icon">
                     </a>
                 </div>
@@ -214,6 +214,19 @@
         width: 36px;
         height: 36px;
         background-color: #0066CC;
+        color: white;
+        border-radius: 50%;
+        text-decoration: none;
+        transition: all 0.3s ease;
+    }
+
+    .social-link2 {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        background-color:rgb(255, 255, 255);
         color: white;
         border-radius: 50%;
         text-decoration: none;

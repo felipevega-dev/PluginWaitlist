@@ -233,6 +233,19 @@
         transition: all 0.3s ease;
     }
     
+
+    .social-link2:hover {
+        background-color:rgb(117, 182, 31);
+        transform: translateY(-2px);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    
+    .social-link2 .dashicons {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+    }
+
     .social-link:hover {
         background-color: #004C99;
         transform: translateY(-2px);

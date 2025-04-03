@@ -167,114 +167,59 @@ class Waitlist_Admin {
     }
     
     /**
-     * Renderiza la página de configuración
+     * Procesa el formulario de configuración
      */
-    public function render_settings_page() {
-        // Opciones a guardar
-        $options = array(
-            'waitlist_show_variation_count' => 'show_variation_count',
-            'waitlist_show_subscriber_emails' => 'show_subscriber_emails',
-            'waitlist_max_emails_display' => 'max_emails_display',
-            'waitlist_excel_header_color' => 'excel_header_color',
-            'waitlist_excel_alternate_color' => 'excel_alternate_color',
-            'waitlist_include_timestamp' => 'include_timestamp',
-            'waitlist_email_subject' => 'email_subject',
-            'waitlist_email_message' => 'email_message',
-            'waitlist_email_from_name' => 'email_from_name',
-            'waitlist_email_from_address' => 'email_from_address',
-            'waitlist_email_logo' => 'email_logo',
-            'waitlist_email_color_header' => 'email_color_header',
-            'waitlist_email_color_button' => 'email_color_button',
+    public function process_settings_form() {
+        // Verificar si se envió el formulario
+        if (!isset($_POST['submit']) || !isset($_POST['waitlist_settings_nonce'])) {
+            return;
+        }
+
+        // Verificar el nonce
+        if (!wp_verify_nonce($_POST['waitlist_settings_nonce'], 'waitlist_settings')) {
+            wp_die('No tienes permiso para realizar esta acción.');
+        }
+
+        // Guardar las opciones de visualización
+        update_option('waitlist_show_variation_count', isset($_POST['show_variation_count']) ? '1' : '0');
+        update_option('waitlist_show_subscriber_emails', isset($_POST['show_subscriber_emails']) ? '1' : '0');
+        update_option('waitlist_max_emails_display', absint($_POST['max_emails_display']));
+
+        // Guardar las opciones de exportación
+        update_option('waitlist_excel_header_color', sanitize_text_field($_POST['excel_header_color']));
+        update_option('waitlist_excel_alternate_color', sanitize_text_field($_POST['excel_alternate_color']));
+        update_option('waitlist_include_timestamp', isset($_POST['include_timestamp']) ? '1' : '0');
+
+        // Guardar las opciones de email
+        update_option('waitlist_email_subject', wp_kses_post($_POST['email_subject']));
+        update_option('waitlist_email_message', wp_kses_post($_POST['email_message']));
+        update_option('waitlist_email_logo', esc_url_raw($_POST['email_logo']));
+        update_option('waitlist_email_color_header', sanitize_hex_color($_POST['email_color_header']));
+        update_option('waitlist_email_color_button', sanitize_hex_color($_POST['email_color_button']));
+        update_option('waitlist_email_from_name', sanitize_text_field($_POST['email_from_name']));
+        update_option('waitlist_email_from_address', sanitize_email($_POST['email_from_address']));
+
+        // Mostrar mensaje de éxito
+        add_settings_error(
+            'waitlist_messages',
+            'waitlist_message',
+            'La configuración se ha guardado correctamente.',
+            'updated'
         );
-        
-        // Procesar migración desde YITH si se solicita
-        if (isset($_POST['yith_migration']) && isset($_POST['waitlist_migration_nonce']) && wp_verify_nonce($_POST['waitlist_migration_nonce'], 'waitlist_migration')) {
-            $result = $this->process_yith_migration();
-            
-            if (isset($result['success'])) {
-                echo '<div class="notice notice-success is-dismissible"><p>' . $result['success'] . '</p></div>';
-            } else if (isset($result['error'])) {
-                echo '<div class="notice notice-error is-dismissible"><p>' . $result['error'] . '</p></div>';
-            }
-        }
-        
-        // Procesar importación de archivo si se solicita
-        if (isset($_FILES['subscribers_file']) && !empty($_FILES['subscribers_file']['tmp_name']) && 
-            isset($_POST['waitlist_import_nonce']) && wp_verify_nonce($_POST['waitlist_import_nonce'], 'waitlist_import')) {
-            
-            $result = $this->process_subscribers_import();
-            
-            if (isset($result['success'])) {
-                echo '<div class="notice notice-success is-dismissible"><p>' . $result['success'] . '</p></div>';
-            } else if (isset($result['error'])) {
-                echo '<div class="notice notice-error is-dismissible"><p>' . $result['error'] . '</p></div>';
-            }
-        }
-        
-        // Guardar configuración
-        if (isset($_POST['waitlist_settings_nonce']) && wp_verify_nonce($_POST['waitlist_settings_nonce'], 'waitlist_settings')) {
-            // Guardar opciones
-            foreach ($options as $option_name => $post_key) {
-                if (isset($_POST[$post_key])) {
-                    if (in_array($post_key, array('email_subject', 'email_message', 'email_from_name', 'email_from_address', 'email_logo'))) {
-                        // Para los campos de texto y HTML
-                        if ($post_key === 'email_message') {
-                            // Para el contenido HTML del editor
-                            update_option($option_name, wp_kses_post($_POST[$post_key]));
-                        } else {
-                            update_option($option_name, sanitize_text_field($_POST[$post_key]));
-                        }
-                    } else if ($post_key === 'max_emails_display') {
-                        update_option($option_name, intval($_POST[$post_key]));
-                    } else if (in_array($post_key, array('excel_header_color', 'excel_alternate_color', 'email_color_header', 'email_color_button'))) {
-                        // Para los campos de color
-                        update_option($option_name, sanitize_hex_color($_POST[$post_key]));
-                    } else {
-                        // Opciones de checkbox
-                        update_option($option_name, '1');
-                    }
-                } else if (strpos($post_key, 'show_') === 0 || $post_key === 'include_timestamp') {
-                    // Si no está definido en el POST y es un checkbox, lo establecemos a '0'
-                    update_option($option_name, '0');
-                }
-            }
-            
-            // Mostrar mensaje de éxito
-            echo '<div class="notice notice-success is-dismissible"><p>Configuración guardada correctamente.</p></div>';
-        }
-        
-        // Incluir la plantilla
-        include WAITLIST_PLUGIN_DIR . 'includes/admin/views/settings-page.php';
     }
     
     /**
-     * Procesa la migración de datos desde YITH WooCommerce Waitlist
+     * Renderiza la página de configuración
      */
-    private function process_yith_migration() {
-        // Mostrar un mensaje de proceso iniciado
-        echo '<div class="notice notice-info"><p>Iniciando migración de datos desde YITH WooCommerce Waitlist...</p></div>';
+    public function render_settings_page() {
+        // Procesar el formulario si se envió
+        $this->process_settings_form();
         
-        // Realizar la migración
-        $result = Waitlist_Model::migrate_from_yith();
+        // Mostrar mensajes de error/éxito
+        settings_errors('waitlist_messages');
         
-        // Mostrar resultados
-        if ($result['migrated'] > 0 || $result['already_exists'] > 0) {
-            $message = sprintf(
-                'Migración completada. %d suscriptores migrados exitosamente, %d ya existían, %d errores.',
-                $result['migrated'],
-                $result['already_exists'],
-                $result['errors']
-            );
-            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($message) . '</p></div>';
-        } else if ($result['total'] === 0) {
-            echo '<div class="notice notice-warning is-dismissible"><p>No se encontraron datos para migrar desde YITH WooCommerce Waitlist.</p></div>';
-        } else {
-            $message = sprintf(
-                'La migración ha encontrado problemas. 0 suscriptores migrados, %d errores.',
-                $result['errors']
-            );
-            echo '<div class="notice notice-error is-dismissible"><p>' . esc_html($message) . '</p></div>';
-        }
+        // Incluir la vista
+        include WAITLIST_PLUGIN_DIR . 'includes/admin/views/settings-page.php';
     }
     
     /**

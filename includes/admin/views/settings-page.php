@@ -5,7 +5,7 @@
         <p><strong>Nota:</strong> Este sistema ahora gestiona de forma independiente toda la funcionalidad de lista de espera. La personalización de los correos electrónicos y otras opciones están disponibles aquí.</p>
     </div>
     
-    <form method="post" action="">
+    <form method="post" action="<?php echo admin_url('admin.php?page=waitlist-settings'); ?>">
         <?php wp_nonce_field('waitlist_settings', 'waitlist_settings_nonce'); ?>
         
         <div class="waitlist-settings-section">
@@ -159,7 +159,64 @@
                             'textarea_rows' => 15,
                             'teeny' => false
                         );
-                        wp_editor(get_option('waitlist_email_message', '<p>Hola,</p><p>Nos complace informarte que <strong>{product_name}</strong> ya está disponible en nuestra tienda.</p><p>Puedes verlo aquí: <a href="{product_url}">Ver producto</a></p><p>Saludos,<br>{store_name}</p>'), 'email_message', $settings);
+                        
+                        // Definir la plantilla por defecto
+                        $default_email_template = '
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <!-- Sección de Saludo -->
+    <div style="padding: 20px; background-color: #f9f9f9; border-radius: 8px; margin-bottom: 20px;">
+        <h2 style="color: #333; margin: 0;">¡Buenas noticias! 🎉</h2>
+    </div>
+
+    <!-- Contenido Principal -->
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 20px;">
+        <p style="font-size: 16px; line-height: 1.6; color: #444; margin-top: 0;">
+            Nos complace informarte que el producto que estabas esperando ya está disponible:
+        </p>
+        
+        <!-- Destacado del Producto -->
+        <div style="background-color: #f5f8ff; border-left: 4px solid #0066CC; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+            <h3 style="color: #0066CC; margin: 0 0 10px 0; font-size: 20px;">{product_name}</h3>
+            <p style="margin: 0; color: #666;">¡No esperes más para conseguirlo!</p>
+        </div>
+
+        <!-- Botón de Acción -->
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{product_url}" style="display: inline-block; background-color: #0066CC; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px;">Ver Producto</a>
+        </div>
+
+        <p style="font-size: 14px; color: #666; margin-bottom: 0;">
+            Si tienes alguna pregunta, no dudes en contactarnos. Estamos aquí para ayudarte.
+        </p>
+    </div>
+
+    <!-- Firma -->
+    <div style="text-align: center; padding: 20px;">
+        <p style="margin: 0; color: #888; font-size: 14px;">
+            Saludos cordiales,<br>
+            <strong style="color: #333;">{store_name}</strong>
+        </p>
+    </div>
+
+    <!-- Pie de Página -->
+    <div style="border-top: 2px solid #f0f0f0; padding-top: 20px; text-align: center; font-size: 12px; color: #999;">
+        <p style="margin: 0;">
+            Este correo fue enviado a {customer_email}<br>
+            Fecha: {date}
+        </p>
+        <p style="margin: 5px 0 0 0;">
+            <a href="{store_url}" style="color: #0066CC; text-decoration: none;">Visitar nuestra tienda</a>
+        </p>
+    </div>
+</div>';
+
+                        // Obtener el contenido guardado o usar la plantilla por defecto
+                        $email_content = get_option('waitlist_email_message');
+                        if (empty($email_content)) {
+                            $email_content = $default_email_template;
+                        }
+
+                        wp_editor($email_content, 'email_message', $settings);
                         ?>
                         <p class="description">
                             Mensaje del correo electrónico enviado a los suscriptores.

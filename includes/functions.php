@@ -170,6 +170,31 @@ function waitlist_export_csv() {
                 return;
             }
             
+            // Agrupar suscriptores por email para la exportación
+            $email_counts = array();
+            foreach ($subscribers as $subscriber) {
+                $email = $subscriber->email;
+                
+                if (!isset($email_counts[$email])) {
+                    $email_counts[$email] = array(
+                        'user' => '',
+                        'products' => array(),
+                        'count' => 0
+                    );
+                    
+                    // Obtener información de usuario si está registrado
+                    $user = get_user_by('email', $email);
+                    if ($user) {
+                        $email_counts[$email]['user'] = $user->display_name;
+                    } else {
+                        $email_counts[$email]['user'] = 'No registrado';
+                    }
+                }
+                
+                $email_counts[$email]['count']++;
+                $email_counts[$email]['products'][] = $subscriber->product_id;
+            }
+            
             // Configurar título de la hoja
             if ($product_id > 0) {
                 $product = wc_get_product($product_id);
@@ -180,21 +205,21 @@ function waitlist_export_csv() {
             }
             
             // Configurar cabeceras
-            $sheet->setCellValue('A1', 'ID');
-            $sheet->setCellValue('B1', 'Producto');
-            $sheet->setCellValue('C1', 'Email');
+            $sheet->setCellValue('A1', 'Email');
+            $sheet->setCellValue('B1', 'Usuario');
+            $sheet->setCellValue('C1', 'Productos Diferentes');
             
             // Aplicar estilo a cabeceras
             $sheet->getStyle('A1:C1')->applyFromArray($headerStyle);
             
             // Escribir datos
             $row = 2;
-            foreach ($subscribers as $subscriber) {
-                $product_name = isset($subscriber->product_name) ? $subscriber->product_name : 'Producto #' . $subscriber->product_id;
+            foreach ($email_counts as $email => $data) {
+                $unique_product_ids = array_unique($data['products']);
                 
-                $sheet->setCellValue('A' . $row, $subscriber->product_id);
-                $sheet->setCellValue('B' . $row, $product_name);
-                $sheet->setCellValue('C' . $row, $subscriber->email);
+                $sheet->setCellValue('A' . $row, $email);
+                $sheet->setCellValue('B' . $row, $data['user']);
+                $sheet->setCellValue('C' . $row, count($unique_product_ids));
                 
                 // Aplicar estilo a filas alternas
                 if ($row % 2 == 0) {

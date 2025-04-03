@@ -14,6 +14,29 @@
             </form>
         </div>
         
+        <div class="waitlist-sort-box">
+            <form method="get" class="sort-form">
+                <input type="hidden" name="page" value="waitlist-subscribers">
+                <?php if (!empty($search)): ?>
+                <input type="hidden" name="search" value="<?php echo esc_attr($search); ?>">
+                <?php endif; ?>
+                <?php if (isset($_GET['paged'])): ?>
+                <input type="hidden" name="paged" value="<?php echo intval($_GET['paged']); ?>">
+                <?php endif; ?>
+                
+                <label for="orderby">Ordenar por:</label>
+                <select name="orderby" id="orderby" onchange="this.form.submit()">
+                    <option value="products" <?php selected(isset($_GET['orderby']) ? $_GET['orderby'] : '', 'products'); ?>>Productos</option>
+                    <option value="email" <?php selected(isset($_GET['orderby']) ? $_GET['orderby'] : '', 'email'); ?>>Email</option>
+                </select>
+                
+                <select name="order" id="order" onchange="this.form.submit()">
+                    <option value="desc" <?php selected(isset($_GET['order']) ? $_GET['order'] : 'desc', 'desc'); ?>>Descendente</option>
+                    <option value="asc" <?php selected(isset($_GET['order']) ? $_GET['order'] : '', 'asc'); ?>>Ascendente</option>
+                </select>
+            </form>
+        </div>
+        
         <div class="waitlist-export">
             <a href="<?php echo admin_url('admin-post.php?action=waitlist_export_csv&export_type=subscribers'); ?>" class="button excel-export-button">
                 <span class="dashicons dashicons-media-spreadsheet"></span> Exportar a Excel
@@ -22,6 +45,9 @@
     </div>
     
     <?php
+    // Obtener todos los recuentos de suscripción por email
+    $all_email_counts = Waitlist_Model::get_email_subscription_counts();
+
     // Obtener un recuento de los emails y los productos que tienen en lista de espera
     // Nota: los suscriptores ya vienen paginados de la base de datos
     $email_counts = array();
@@ -32,7 +58,9 @@
             $email_counts[$email] = array(
                 'count' => 0,
                 'products' => array(),
-                'ids' => array()
+                'ids' => array(),
+                // Obtener el recuento total de productos diferentes desde la base de datos
+                'total_products' => isset($all_email_counts[$email]) ? $all_email_counts[$email] : 0
             );
         }
         $email_counts[$email]['count']++;
@@ -40,9 +68,28 @@
         $email_counts[$email]['ids'][] = $subscriber->id;
     }
     
-    // Ordenar por número de suscripciones (por defecto)
-    uasort($email_counts, function($a, $b) {
-        return $b['count'] - $a['count']; // Orden descendente
+    // Aplicar ordenamiento según los parámetros
+    $orderby = isset($_GET['orderby']) ? sanitize_text_field($_GET['orderby']) : 'products';
+    $order = isset($_GET['order']) ? sanitize_text_field($_GET['order']) : 'desc';
+    
+    uasort($email_counts, function($a, $b) use ($orderby, $order, $email_counts) {
+        if ($orderby === 'products') {
+            // Ordenar por número total de productos diferentes
+            $products_a = $a['total_products'];
+            $products_b = $b['total_products'];
+            $result = $products_a - $products_b;
+        } else if ($orderby === 'email') {
+            // Ordenar por email alfabéticamente
+            $emails_a = key($a);
+            $emails_b = key($b);
+            $result = strcmp($emails_a, $emails_b);
+        } else {
+            // Ordenamiento por defecto (número de suscripciones)
+            $result = $a['count'] - $b['count'];
+        }
+        
+        // Aplicar dirección del ordenamiento
+        return $order === 'asc' ? $result : -$result;
     });
     
     // Usar $email_counts_total para mostrar total de registros 
@@ -57,14 +104,13 @@
                 <th>Email</th>
                 <th>Usuario</th>
                 <th>Productos</th>
-                <th width="100" class="num">Suscripciones</th>
                 <th width="100">Acciones</th>
             </tr>
         </thead>
         <tbody>
             <?php if (empty($subscribers)): ?>
                 <tr>
-                    <td colspan="5">No hay suscriptores en la lista de espera.</td>
+                    <td colspan="4">No hay suscriptores en la lista de espera.</td>
                 </tr>
             <?php else: ?>
                 <?php 
@@ -98,7 +144,7 @@
                         </td>
                         <td>
                             <?php if (count($unique_product_ids) > 1): ?>
-                                <span class="badge"><?php echo count($unique_product_ids); ?></span> productos diferentes
+                                <span class="badge"><?php echo isset($subscriber_data['total_products']) ? $subscriber_data['total_products'] : count($unique_product_ids); ?></span> productos diferentes
                                 <div class="row-actions">
                                     <span class="view">
                                         <a href="#" class="show-all-products" data-email="<?php echo esc_attr(md5($email)); ?>">Ver todos</a>
@@ -110,9 +156,6 @@
                                 </a>
                             <?php endif; ?>
                         </td>
-                        <td class="num">
-                            <strong class="subscriptions-count"><?php echo $subscriber_data['count']; ?></strong>
-                        </td>
                         <td>
                             <a href="#" class="delete-all-subscriptions button button-small" data-email="<?php echo esc_attr($email); ?>" data-nonce="<?php echo wp_create_nonce('delete_subscriber'); ?>">
                                 <span class="dashicons dashicons-trash"></span> Eliminar
@@ -121,11 +164,25 @@
                     </tr>
                     <!-- Fila oculta para mostrar todos los productos -->
                     <tr id="products-<?php echo esc_attr(md5($email)); ?>" class="products-detail-row" style="display: none;">
-                        <td colspan="5">
+                        <td colspan="4">
                             <div class="products-detail-content">
                                 <h4>Productos en lista de espera para <?php echo esc_html($email); ?>:</h4>
+                                <?php 
+                                // Obtener todos los productos a los que está suscrito este email
+                                // Incluso los que no están en la página actual
+                                global $wpdb;
+                                $table_name = $wpdb->prefix . 'waitlist';
+                                $all_product_ids = $wpdb->get_col($wpdb->prepare(
+                                    "SELECT DISTINCT product_id FROM $table_name WHERE user_email = %s ORDER BY product_id",
+                                    $email
+                                ));
+                                
+                                if (count($all_product_ids) > count($unique_product_ids)) {
+                                    echo '<p><em>Mostrando ' . count($all_product_ids) . ' productos en total.</em></p>';
+                                }
+                                ?>
                                 <ul class="products-list">
-                                    <?php foreach ($unique_product_ids as $pid): 
+                                    <?php foreach ($all_product_ids as $pid): 
                                         $p = wc_get_product($pid);
                                         if (!$p) continue;
                                     ?>
@@ -155,7 +212,8 @@
     <div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px;">
         <p><strong>Depuración:</strong> Total emails únicos: <?php echo $total_items; ?> | 
            Emails en esta página: <?php echo $email_unique_count; ?> |
-           Total suscripciones mostradas: <?php echo array_sum(array_column($email_counts, 'count')); ?> |
+           Total suscripciones (total BD): <?php echo array_sum($all_email_counts); ?> |
+           Total visible en esta página: <?php echo array_sum(array_column($email_counts, 'count')); ?> |
            Total páginas: <?php echo $total_pages; ?> | 
            Página actual: <?php echo $current_page; ?>
         </p>
@@ -457,9 +515,10 @@ jQuery(document).ready(function($) {
         }
         
         .waitlist-search-box,
+        .waitlist-sort-box,
         .waitlist-export {
             width: 100%;
-            margin-bottom: 10px;
+            margin: 0 0 10px 0;
         }
         
         .waitlist-search-box .search-form {
@@ -554,5 +613,23 @@ jQuery(document).ready(function($) {
         width: 40px;
         height: 30px;
         text-align: center;
+    }
+    
+    .waitlist-sort-box {
+        margin: 0 15px;
+        display: flex;
+        align-items: center;
+    }
+    
+    .waitlist-sort-box label {
+        margin-right: 8px;
+        font-weight: 500;
+    }
+    
+    .waitlist-sort-box select {
+        margin-right: 5px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
     }
 </style>

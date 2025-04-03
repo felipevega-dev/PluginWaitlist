@@ -906,4 +906,38 @@ class Waitlist_Model {
             'total' => $migrated + $errors + $already_exists
         );
     }
+    
+    /**
+     * Obtiene el recuento de suscripciones por email de todos los suscriptores
+     * agrupados por dirección de email
+     * 
+     * @return array Array con emails como claves y recuentos como valores
+     */
+    public static function get_email_subscription_counts() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'waitlist';
+        
+        // Esta consulta cuenta cuántos productos diferentes tiene cada email
+        $query = "
+            SELECT 
+                user_email,
+                COUNT(DISTINCT product_id) as product_count
+            FROM 
+                $table_name
+            GROUP BY 
+                user_email
+            ORDER BY 
+                product_count DESC
+        ";
+        
+        $results = $wpdb->get_results($query);
+        
+        // Crear un array con email => recuento de productos
+        $email_counts = array();
+        foreach ($results as $result) {
+            $email_counts[$result->user_email] = $result->product_count;
+        }
+        
+        return $email_counts;
+    }
 }

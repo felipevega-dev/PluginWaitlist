@@ -87,6 +87,15 @@ class Waitlist_Admin {
             'waitlist-settings',
             array($this, 'render_settings_page')
         );
+        
+        add_submenu_page(
+            'waitlist',
+            'Acerca de',
+            'Acerca de',
+            'manage_options',
+            'waitlist-about',
+            array($this, 'render_about_page')
+        );
     }
     
     /**
@@ -262,5 +271,13 @@ class Waitlist_Admin {
             );
             echo '<div class="notice notice-error is-dismissible"><p>' . esc_html($message) . '</p></div>';
         }
+    }
+    
+    /**
+     * Renderiza la página "Acerca de" con información del plugin
+     */
+    public function render_about_page() {
+        // Incluir la plantilla
+        include WAITLIST_PLUGIN_DIR . 'includes/admin/views/about-page.php';
     }
 } 

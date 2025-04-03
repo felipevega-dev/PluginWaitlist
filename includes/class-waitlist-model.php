@@ -76,32 +76,25 @@ class Waitlist_Model {
         
         $subscribers = array();
         
-        // Consulta base para obtener suscriptores de nuestra tabla
-        $query = "SELECT 
-            id, 
-            product_id, 
-            user_email, 
-            created_at
-        FROM 
-            $table_name
-        WHERE 1=1";
+        // Consulta para obtener emails únicos primero
+        $email_query = "SELECT DISTINCT user_email FROM $table_name WHERE 1=1";
         
         $args = array();
         
         // Si hay un ID de producto, filtrar por ese producto
         if ($product_id > 0) {
-            $query .= " AND product_id = %d";
+            $email_query .= " AND product_id = %d";
             $args[] = $product_id;
         }
         
         // Filtrar por búsqueda si es necesario
         if (!empty($search)) {
-            $query .= " AND (user_email LIKE %s";
+            $email_query .= " AND (user_email LIKE %s";
             $args[] = '%' . $wpdb->esc_like($search) . '%';
             
             // También buscar en productos por nombre si no se especificó un producto_id
             if ($product_id <= 0) {
-                $query .= " OR product_id IN (
+                $email_query .= " OR product_id IN (
                     SELECT ID FROM {$wpdb->posts}
                     WHERE post_type IN ('product', 'product_variation')
                     AND post_title LIKE %s
@@ -109,26 +102,75 @@ class Waitlist_Model {
                 $args[] = '%' . $wpdb->esc_like($search) . '%';
             }
             
-            $query .= ")";
+            $email_query .= ")";
         }
         
-        // Contar el total de suscriptores para la paginación
-        $count_query = str_replace("SELECT id, product_id, user_email, created_at", "SELECT COUNT(*)", $query);
+        // Contar el total de emails únicos para la paginación
+        $count_query = "SELECT COUNT(DISTINCT user_email) FROM $table_name WHERE 1=1";
+        
+        if (!empty($args)) {
+            // Recrear la parte WHERE para la consulta de conteo
+            if ($product_id > 0) {
+                $count_query .= " AND product_id = %d";
+            }
+            
+            if (!empty($search)) {
+                $count_query .= " AND (user_email LIKE %s";
+                
+                if ($product_id <= 0) {
+                    $count_query .= " OR product_id IN (
+                        SELECT ID FROM {$wpdb->posts}
+                        WHERE post_type IN ('product', 'product_variation')
+                        AND post_title LIKE %s
+                    )";
+                }
+                
+                $count_query .= ")";
+            }
+        }
+        
         self::$total_items = $wpdb->get_var($wpdb->prepare($count_query, $args));
         
-        // Aplicar ordenamiento
-        $query .= " ORDER BY created_at DESC";
+        // Debug - Verificar el total de items
+        error_log('Waitlist total unique emails: ' . self::$total_items);
         
-        // Aplicar paginación si se solicita
+        // Aplicar ordenamiento por email
+        $email_query .= " ORDER BY user_email ASC";
+        
+        // Aplicar paginación a los emails únicos
         if ($per_page > 0) {
             $offset = ($page_number - 1) * $per_page;
-            $query .= " LIMIT %d OFFSET %d";
+            $email_query .= " LIMIT %d OFFSET %d";
             $args[] = $per_page;
             $args[] = $offset;
         }
         
-        // Preparar y ejecutar la consulta final
-        $results = $wpdb->get_results($wpdb->prepare($query, $args));
+        // Ejecutar la consulta para obtener los emails de esta página
+        $emails = $wpdb->get_col($wpdb->prepare($email_query, $args));
+        
+        // Si no hay emails, devolver array vacío
+        if (empty($emails)) {
+            return array();
+        }
+        
+        // Crear placeholders para la consulta IN
+        $placeholders = implode(',', array_fill(0, count($emails), '%s'));
+        
+        // Obtener todos los registros de suscripción para estos emails
+        $query = "SELECT 
+            id, 
+            product_id, 
+            user_email, 
+            created_at
+        FROM 
+            $table_name
+        WHERE 
+            user_email IN ($placeholders)
+        ORDER BY 
+            created_at DESC";
+        
+        // Ejecutar la consulta con todos los emails de esta página
+        $results = $wpdb->get_results($wpdb->prepare($query, $emails));
         
         foreach ($results as $result) {
             $subscriber = new stdClass();
@@ -147,8 +189,6 @@ class Waitlist_Model {
                 $subscriber->product_name = 'Producto #' . $result->product_id;
                 $subscriber->product_link = '#';
             }
-            
-            $subscriber->source = 'native';
             
             $subscribers[] = $subscriber;
         }
@@ -503,8 +543,7 @@ class Waitlist_Model {
                     ELSE p.post_parent
                 END AS main_product_id,
                 COUNT(DISTINCT w.id) as subscribers_count,
-                COUNT(DISTINCT w.product_id) as variations_count,
-                MAX(w.created_at) as last_subscription
+                COUNT(DISTINCT w.product_id) as variations_count
             FROM 
                 {$table_name} w
             JOIN 

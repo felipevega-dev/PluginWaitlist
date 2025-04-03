@@ -131,7 +131,7 @@ class Waitlist_Admin {
         $search = isset($_GET['search']) ? sanitize_text_field($_GET['search']) : '';
         
         // Configuración de paginación
-        $per_page = 20; // Mostrar 20 suscriptores por página por defecto
+        $per_page = 30; // Mostrar 30 suscriptores por página
         $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
         
         // Obtener los suscriptores según los filtros y la paginación
@@ -140,6 +140,14 @@ class Waitlist_Admin {
         // Obtener el total de elementos para la paginación
         $total_items = Waitlist_Model::$total_items;
         $total_pages = ceil($total_items / $per_page);
+        
+        // Asegurar que haya al menos una página
+        if ($total_pages < 1) {
+            $total_pages = 1;
+        }
+        
+        // Debug de paginación
+        error_log("Waitlist Paginación: Items: {$total_items}, Por página: {$per_page}, Total páginas: {$total_pages}, Página actual: {$current_page}");
         
         // Incluir la plantilla
         include WAITLIST_PLUGIN_DIR . 'includes/admin/views/subscribers-page.php';

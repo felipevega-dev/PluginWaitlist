@@ -23,6 +23,7 @@
     
     <?php
     // Obtener un recuento de los emails y los productos que tienen en lista de espera
+    // Nota: los suscriptores ya vienen paginados de la base de datos
     $email_counts = array();
     foreach ($subscribers as $subscriber) {
         $email = $subscriber->email;
@@ -43,6 +44,10 @@
     uasort($email_counts, function($a, $b) {
         return $b['count'] - $a['count']; // Orden descendente
     });
+    
+    // Usar $email_counts_total para mostrar total de registros 
+    // pero mantener la variable $email_counts solo para los actuales
+    $email_unique_count = count($email_counts);
     ?>
     
     <!-- Tabla de suscriptores -->
@@ -147,7 +152,15 @@
     </table>
     
     <!-- Navegación de paginación -->
-    <?php if ($total_pages > 1): ?>
+    <div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px;">
+        <p><strong>Depuración:</strong> Total emails únicos: <?php echo $total_items; ?> | 
+           Emails en esta página: <?php echo $email_unique_count; ?> |
+           Total suscripciones mostradas: <?php echo array_sum(array_column($email_counts, 'count')); ?> |
+           Total páginas: <?php echo $total_pages; ?> | 
+           Página actual: <?php echo $current_page; ?>
+        </p>
+    </div>
+    
     <div class="waitlist-pagination">
         <div class="tablenav-pages">
             <span class="displaying-num"><?php echo $total_items; ?> elementos</span>
@@ -155,7 +168,7 @@
                 <?php
                 // Enlace a primera página
                 if ($current_page > 1):
-                    $first_page_url = add_query_arg('paged', 1, remove_query_arg('paged'));
+                    $first_page_url = add_query_arg('paged', 1, remove_query_arg('paged', $_SERVER['REQUEST_URI']));
                 ?>
                 <a class="first-page button" href="<?php echo esc_url($first_page_url); ?>">
                     <span class="screen-reader-text">Primera página</span>
@@ -169,7 +182,7 @@
                 // Enlace a página anterior
                 if ($current_page > 1):
                     $prev_page = max(1, $current_page - 1);
-                    $prev_page_url = add_query_arg('paged', $prev_page, remove_query_arg('paged'));
+                    $prev_page_url = add_query_arg('paged', $prev_page, $_SERVER['REQUEST_URI']);
                 ?>
                 <a class="prev-page button" href="<?php echo esc_url($prev_page_url); ?>">
                     <span class="screen-reader-text">Página anterior</span>
@@ -190,7 +203,7 @@
                 // Enlace a página siguiente
                 if ($current_page < $total_pages):
                     $next_page = min($total_pages, $current_page + 1);
-                    $next_page_url = add_query_arg('paged', $next_page);
+                    $next_page_url = add_query_arg('paged', $next_page, $_SERVER['REQUEST_URI']);
                 ?>
                 <a class="next-page button" href="<?php echo esc_url($next_page_url); ?>">
                     <span class="screen-reader-text">Página siguiente</span>
@@ -203,7 +216,7 @@
                 <?php
                 // Enlace a última página
                 if ($current_page < $total_pages):
-                    $last_page_url = add_query_arg('paged', $total_pages);
+                    $last_page_url = add_query_arg('paged', $total_pages, $_SERVER['REQUEST_URI']);
                 ?>
                 <a class="last-page button" href="<?php echo esc_url($last_page_url); ?>">
                     <span class="screen-reader-text">Última página</span>
@@ -215,7 +228,6 @@
             </span>
         </div>
     </div>
-    <?php endif; ?>
 </div>
 
 <script>
@@ -458,5 +470,89 @@ jQuery(document).ready(function($) {
             width: 100%;
             min-width: auto;
         }
+    }
+    
+    /* Estilos para encabezados blancos */
+    .waitlist-excel-table thead th {
+        background-color: #0066CC !important;
+        color: #FFFFFF !important;
+        font-weight: bold;
+    }
+    
+    /* Ajustar el estilo de la tabla */
+    .waitlist-excel-table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 15px;
+    }
+    
+    .waitlist-excel-table th, 
+    .waitlist-excel-table td {
+        padding: 8px;
+        border: 1px solid #ddd;
+    }
+    
+    .waitlist-excel-table tr:nth-child(even) {
+        background-color: #f2f2f2;
+    }
+    
+    /* Ajustes para la paginación */
+    .waitlist-pagination {
+        margin-top: 20px;
+        padding: 15px;
+        background: #fff;
+        border-radius: 4px;
+        box-shadow: 0 1px 3px rgba(0,0,0,.1);
+        display: flex;
+        justify-content: flex-end;
+    }
+    
+    .tablenav-pages {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .displaying-num {
+        font-weight: bold;
+        color: #555;
+    }
+    
+    .pagination-links {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .tablenav-pages-navspan.button,
+    .pagination-links a.button {
+        padding: 0 10px;
+        line-height: 30px;
+        height: 30px;
+        min-width: 30px;
+        text-align: center;
+    }
+    
+    .pagination-links a.button {
+        background-color: #0073aa;
+        color: white;
+        border-color: #006799;
+    }
+    
+    .pagination-links a.button:hover {
+        background-color: #006799;
+    }
+    
+    .paging-input {
+        margin: 0 5px;
+        display: flex;
+        align-items: center;
+    }
+    
+    .current-page {
+        width: 40px;
+        height: 30px;
+        text-align: center;
     }
 </style>

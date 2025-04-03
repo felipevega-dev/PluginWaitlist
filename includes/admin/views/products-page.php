@@ -326,11 +326,6 @@
                 case 'variations':
                     $result = $a->variations_count - $b->variations_count;
                     break;
-                case 'last_subscription':
-                    $a_date = isset($a->last_subscription) ? strtotime($a->last_subscription) : 0;
-                    $b_date = isset($b->last_subscription) ? strtotime($b->last_subscription) : 0;
-                    $result = $a_date - $b_date;
-                    break;
                 default:
                     $result = $a->subscribers_count - $b->subscribers_count;
             }
@@ -417,7 +412,6 @@
                         <option value="name" <?php selected($orderby, 'name'); ?>>Nombre</option>
                         <option value="id" <?php selected($orderby, 'id'); ?>>ID</option>
                         <option value="variations" <?php selected($orderby, 'variations'); ?>>Variaciones</option>
-                        <option value="last_subscription" <?php selected($orderby, 'last_subscription'); ?>>Última Suscripción</option>
                     </select>
                     
                     <select name="order" id="order" onchange="this.form.submit()">
@@ -443,7 +437,6 @@
                     <th class="column-name">Producto</th>
                     <th class="column-subscribers num">Total Suscriptores</th>
                     <th class="column-variations num">Variaciones</th>
-                    <th class="column-last-subscription">Última Suscripción</th>
                 </tr>
             </thead>
             <tbody>
@@ -502,11 +495,6 @@
                             case 'variations':
                                 $result = $a->variations_count - $b->variations_count;
                                 break;
-                            case 'last_subscription':
-                                $a_date = isset($a->last_subscription) ? strtotime($a->last_subscription) : 0;
-                                $b_date = isset($b->last_subscription) ? strtotime($b->last_subscription) : 0;
-                                $result = $a_date - $b_date;
-                                break;
                             default:
                                 $result = $a->subscribers_count - $b->subscribers_count;
                         }
@@ -559,13 +547,6 @@
                             </td>
                             <td class="column-variations num">
                                 <strong><?php echo intval($item->variations_count); ?></strong>
-                            </td>
-                            <td class="column-last-subscription">
-                                <?php if (isset($item->last_subscription) && !empty($item->last_subscription)): ?>
-                                    <span class="last-subscription-date"><?php echo date('d/m/Y H:i', strtotime($item->last_subscription)); ?></span>
-                                <?php else: ?>
-                                    <span class="no-date">—</span>
-                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -963,14 +944,6 @@
     .pagination-info {
         color: #666;
         font-size: 13px;
-    }
-    
-    .column-last-subscription {
-        width: 140px;
-    }
-    
-    .last-subscription-date {
-        white-space: nowrap;
     }
 </style>
 

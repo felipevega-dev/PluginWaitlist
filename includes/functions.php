@@ -74,10 +74,9 @@ function waitlist_export_csv() {
         $sheet->setCellValue('B1', 'Producto');
         $sheet->setCellValue('C1', 'Total Suscriptores');
         $sheet->setCellValue('D1', 'Variaciones');
-        $sheet->setCellValue('E1', 'Última Suscripción');
         
         // Aplicar estilo a cabeceras
-        $sheet->getStyle('A1:E1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:D1')->applyFromArray($headerStyle);
         
         // Configurar el formato de la tabla
         $sheet->calculateColumnWidths();
@@ -89,18 +88,17 @@ function waitlist_export_csv() {
             $sheet->setCellValue('B' . $row, $item->product_name);
             $sheet->setCellValue('C' . $row, $item->subscribers_count);
             $sheet->setCellValue('D' . $row, $item->variations_count);
-            $sheet->setCellValue('E' . $row, isset($item->last_subscription) ? date('d/m/Y H:i', strtotime($item->last_subscription)) : '');
             
             // Aplicar estilo a filas alternas
             if ($row % 2 == 0) {
-                $sheet->getStyle('A' . $row . ':E' . $row)->applyFromArray($evenRowStyle);
+                $sheet->getStyle('A' . $row . ':D' . $row)->applyFromArray($evenRowStyle);
             }
             
             $row++;
         }
         
         // Autoajustar columnas
-        foreach (range('A', 'E') as $col) {
+        foreach (range('A', 'D') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
         
@@ -185,10 +183,9 @@ function waitlist_export_csv() {
             $sheet->setCellValue('A1', 'ID');
             $sheet->setCellValue('B1', 'Producto');
             $sheet->setCellValue('C1', 'Email');
-            $sheet->setCellValue('D1', 'Fuente');
             
             // Aplicar estilo a cabeceras
-            $sheet->getStyle('A1:D1')->applyFromArray($headerStyle);
+            $sheet->getStyle('A1:C1')->applyFromArray($headerStyle);
             
             // Escribir datos
             $row = 2;
@@ -199,20 +196,16 @@ function waitlist_export_csv() {
                 $sheet->setCellValue('B' . $row, $product_name);
                 $sheet->setCellValue('C' . $row, $subscriber->email);
                 
-                // Determinar la fuente del suscriptor (YITH o nativa)
-                $source = (strpos($subscriber->id, 'yith_') === 0) ? 'YITH' : 'Nativa';
-                $sheet->setCellValue('D' . $row, $source);
-                
                 // Aplicar estilo a filas alternas
                 if ($row % 2 == 0) {
-                    $sheet->getStyle('A' . $row . ':D' . $row)->applyFromArray($evenRowStyle);
+                    $sheet->getStyle('A' . $row . ':C' . $row)->applyFromArray($evenRowStyle);
                 }
                 
                 $row++;
             }
             
             // Autoajustar columnas
-            foreach (range('A', 'D') as $col) {
+            foreach (range('A', 'C') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
             }
             

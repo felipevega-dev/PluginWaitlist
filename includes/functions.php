@@ -404,14 +404,14 @@ function waitlist_process_stock_change($product_id, $status, $variation_id = 0) 
             // Personalizar el mensaje para cada suscriptor
             $personalized_subject = str_replace(
                 array('{product_name}', '{product_url}', '{store_name}', '{store_url}', '{customer_email}', '{date}'),
-                array($product_title, $product_url, $store_name, $store_url, $subscriber->email, $current_date),
+                array($product_title, $product_url, $store_name, $store_url, $subscriber->user_email, $current_date),
                 $subject
             );
             
             // Procesar el contenido del mensaje
             $personalized_message = str_replace(
                 array('{product_name}', '{product_url}', '{store_name}', '{store_url}', '{customer_email}', '{date}'),
-                array($product_title, $product_url, $store_name, $store_url, $subscriber->email, $current_date),
+                array($product_title, $product_url, $store_name, $store_url, $subscriber->user_email, $current_date),
                 $message
             );
             
@@ -428,8 +428,11 @@ function waitlist_process_stock_change($product_id, $status, $variation_id = 0) 
                 'From: ' . $from_name . ' <' . $from_email . '>'
             );
             
+            // Agregar registro de depuración
+            error_log('Enviando correo de lista de espera a: ' . $subscriber->user_email . ' para el producto ID: ' . $target_id);
+            
             // Enviar correo
-            wp_mail($subscriber->email, $personalized_subject, $personalized_html, $headers);
+            wp_mail($subscriber->user_email, $personalized_subject, $personalized_html, $headers);
             
             // Eliminar al suscriptor de la lista de espera
             $wpdb->delete(

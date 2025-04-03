@@ -1,3 +1,9 @@
+<?php
+// Evitamos el acceso directo
+if (!defined('ABSPATH')) {
+    exit;
+}
+?>
 <div class="wrap waitlist-container">
     <h1>Configuración de Lista de Espera</h1>
     
@@ -5,8 +11,9 @@
         <p><strong>Nota:</strong> Este sistema ahora gestiona de forma independiente toda la funcionalidad de lista de espera. La personalización de los correos electrónicos y otras opciones están disponibles aquí.</p>
     </div>
     
-    <form method="post" action="<?php echo admin_url('admin.php?page=waitlist-settings'); ?>">
+    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" id="waitlist-settings-form">
         <?php wp_nonce_field('waitlist_settings', 'waitlist_settings_nonce'); ?>
+        <input type="hidden" name="action" value="save_waitlist_settings">
         
         <div class="waitlist-settings-section">
             <h2>Configuración de Visualización</h2>
@@ -211,7 +218,9 @@
 </div>';
 
                         // Obtener el contenido guardado o usar la plantilla por defecto
-                        $email_content = get_option('waitlist_email_message');
+                        $email_content = get_option('waitlist_email_message', $default_email_template);
+                        
+                        // Asegurarse de que nunca sea vacío
                         if (empty($email_content)) {
                             $email_content = $default_email_template;
                         }
@@ -430,10 +439,7 @@
                 </p>
                 <p>La migración puede tomar tiempo dependiendo del número de suscriptores.</p>
                 
-                <form method="post" action="">
-                    <?php wp_nonce_field('waitlist_migration', 'waitlist_migration_nonce'); ?>
-                    <input type="submit" name="migrate_from_yith" class="button button-primary" value="Migrar datos desde YITH">
-                </form>
+                <a href="#" id="migrate-yith-link" class="button button-primary">Migrar datos desde YITH</a>
             </div>
         </div>
         
@@ -491,228 +497,96 @@
         padding: 0;
         border: 1px solid #ddd;
     }
+    
+    .waitlist-migration-box {
+        background-color: #f8f8f8;
+        border-left: 4px solid #0073aa;
+        padding: 15px;
+        margin-top: 10px;
+    }
 </style>
 
-<!-- Script para selector de colores, carga de logo y vista previa del email -->
-<script>
+<?php
+// Inicializar los selectores de color y media uploader
+wp_enqueue_script('wp-color-picker');
+wp_enqueue_style('wp-color-picker');
+wp_enqueue_media();
+?>
+
+<script type="text/javascript">
 jQuery(document).ready(function($) {
     // Inicializar selectores de color
-    $('.color-picker').wpColorPicker();
-    
-    // Inicializar Media Uploader para el logo
-    var mediaUploader;
-    $('#upload_logo_button').click(function(e) {
-        e.preventDefault();
-        
-        if (mediaUploader) {
-            mediaUploader.open();
-            return;
-        }
-        
-        mediaUploader = wp.media({
-            title: 'Seleccionar Logo',
-            button: {
-                text: 'Usar este logo'
-            },
-            multiple: false
-        });
-        
-        mediaUploader.on('select', function() {
-            var attachment = mediaUploader.state().get('selection').first().toJSON();
-            $('#email_logo').val(attachment.url);
-            $('#logo_preview').attr('src', attachment.url).show();
-            $('#remove_logo_button').show();
-        });
-        
-        mediaUploader.open();
-    });
-    
-    // Botón para eliminar logo
-    $('#remove_logo_button').click(function(e) {
-        e.preventDefault();
-        $('#email_logo').val('');
-        $('#logo_preview').attr('src', '').hide();
-        $(this).hide();
-    });
-    
-    // Mostrar logo si ya hay uno guardado
-    if ($('#email_logo').val()) {
-        $('#logo_preview').attr('src', $('#email_logo').val()).show();
-        $('#remove_logo_button').show();
+    if ($.fn.wpColorPicker) {
+        $('.color-picker').wpColorPicker();
     } else {
-        $('#logo_preview').hide();
-        $('#remove_logo_button').hide();
+        console.error('El plugin wpColorPicker no está disponible');
     }
     
-    // Prevenir que el formulario se envíe al hacer clic en vista previa
-    $('#preview_email_button').click(function(e) {
-        e.preventDefault();
+    // Asegurar que el contenido del editor se guarde antes de enviar
+    $('#waitlist-settings-form').on('submit', function(e) {
+        console.log('Formulario enviándose...');
         
-        // Recopilar datos para la vista previa
-        var logoUrl = $('#email_logo').val();
-        var headerColor = $('#email_color_header').val() || '#0066CC';
-        var buttonColor = $('#email_color_button').val() || '#4CAF50';
-        var emailMessage = $('#email_message').val();
-        var storeName = '<?php echo esc_js(get_bloginfo('name')); ?>';
+        // Si TinyMCE está activo, asegurarse de que el contenido se sincronice
+        if (typeof tinyMCE !== 'undefined') {
+            var editor = tinyMCE.get('email_message');
+            if (editor && !editor.isHidden()) {
+                editor.save(); // Sincroniza el contenido del editor con el textarea
+                console.log('Contenido del editor sincronizado');
+            } else {
+                console.log('Editor no encontrado o está en modo HTML');
+            }
+        }
         
-        // Crear plantilla de correo con HTML y CSS
-        var emailTemplate = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-            <title>Vista Previa Email</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    line-height: 1.6;
-                    margin: 0;
-                    padding: 0;
-                    color: #333333;
-                }
-                .email-container {
-                    max-width: 100%;
-                    margin: 0 auto;
-                    border: 1px solid #dddddd;
-                    border-radius: 8px;
-                    overflow: hidden;
-                }
-                .email-header {
-                    background-color: ${headerColor};
-                    color: white;
-                    padding: 20px;
-                    text-align: center;
-                }
-                .logo-container {
-                    text-align: center;
-                    margin-bottom: 10px;
-                }
-                .logo {
-                    max-width: 150px;
-                    height: auto;
-                }
-                .email-body {
-                    padding: 30px 20px;
-                    background-color: #ffffff;
-                }
-                .email-footer {
-                    background-color: #f7f7f7;
-                    padding: 15px;
-                    text-align: center;
-                    font-size: 12px;
-                    color: #888888;
-                }
-                .button {
-                    display: inline-block;
-                    background-color: ${buttonColor};
-                    color: white;
-                    text-decoration: none;
-                    padding: 12px 25px;
-                    border-radius: 4px;
-                    margin-top: 20px;
-                    margin-bottom: 20px;
-                    font-weight: bold;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="email-container">
-                <div class="email-header">
-                    ${logoUrl ? '<div class="logo-container"><img src="' + logoUrl + '" alt="' + storeName + '" class="logo"></div>' : ''}
-                    <h1>${storeName}</h1>
-                </div>
-                <div class="email-body">
-                    ${emailMessage.replace('{product_name}', 'Producto de Ejemplo').replace('{product_url}', '#').replace('{store_name}', storeName).replace('{store_url}', '#').replace('{customer_email}', 'cliente@ejemplo.com').replace('{date}', '<?php echo date_i18n(get_option('date_format')); ?>')}
-                    <div style="text-align: center;">
-                        <a href="#" class="button">Ver Producto</a>
-                    </div>
-                </div>
-                <div class="email-footer">
-                    &copy; <?php echo date('Y'); ?> ${storeName}. Todos los derechos reservados.
-                </div>
-            </div>
-        </body>
-        </html>`;
-        
-        // Mostrar la vista previa en el modal
-        $('#email_preview_modal_content').html(emailTemplate);
-        $('#email_preview_modal').fadeIn();
+        // Registrar los datos que se enviarán
+        var formData = $(this).serialize();
+        console.log('Datos del formulario:', formData);
     });
     
-    // Cerrar el modal al hacer clic fuera o en el botón cerrar
-    $('.modal-close, .modal-overlay').click(function() {
-        $('#email_preview_modal').fadeOut();
+    // Verificar si hay un mensaje de guardado en la URL
+    var urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('message') === 'saved') {
+        // Mostrar un mensaje de éxito
+        $('<div class="notice notice-success is-dismissible"><p>La configuración se ha guardado correctamente.</p></div>')
+            .insertBefore('#waitlist-settings-form')
+            .delay(5000)
+            .fadeOut(function() {
+                $(this).remove();
+            });
+    }
+    
+    // Hacer que el enlace de migración funcione correctamente
+    $('#migrate-yith-link').on('click', function(e) {
+        e.preventDefault();
+        if (confirm('¿Estás seguro de que deseas migrar los datos desde YITH?')) {
+            var $form = $(
+                '<form method="post" action="">' +
+                '<input type="hidden" name="waitlist_migration_nonce" value="<?php echo wp_create_nonce("waitlist_migration"); ?>" />' +
+                '<input type="hidden" name="action" value="migrate_waitlist" />' +
+                '<input type="hidden" name="migrate_from_yith" value="1" />' +
+                '</form>'
+            );
+            $('body').append($form);
+            $form.submit();
+        }
+    });
+    
+    // Capturar clics en el botón de guardar para depuración
+    $('#submit').on('click', function() {
+        console.log('Botón de guardar presionado');
     });
 });
 </script>
 
-<!-- Estilo para el modal de vista previa -->
-<style>
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 9999;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background-color: rgba(0,0,0,0.6);
+<?php 
+// Manejo de errores y depuración
+if (defined('WP_DEBUG') && WP_DEBUG) {
+    // Mostrar errores PHP si estamos en modo debug
+    ini_set('display_errors', 1);
+    error_reporting(E_ALL);
+    
+    // Verificar si debemos mostrar un mensaje de error
+    if (isset($_GET['error'])) {
+        echo '<div class="notice notice-error"><p>Error: ' . esc_html($_GET['error']) . '</p></div>';
+    }
 }
-
-.modal-content {
-    position: relative;
-    background-color: #fefefe;
-    margin: 5% auto;
-    padding: 0;
-    width: 70%;
-    max-width: 800px;
-    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
-    animation-name: animatetop;
-    animation-duration: 0.4s;
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.modal-header {
-    padding: 15px;
-    background-color: #0066CC;
-    color: white;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.modal-body {
-    padding: 20px;
-    max-height: 70vh;
-    overflow-y: auto;
-}
-
-.modal-close {
-    color: white;
-    float: right;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-@keyframes animatetop {
-    from {top: -300px; opacity: 0}
-    to {top: 0; opacity: 1}
-}
-</style>
-
-<!-- Modal para la vista previa del email -->
-<div id="email_preview_modal" class="modal">
-    <div class="modal-overlay"></div>
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Vista Previa del Email</h2>
-            <span class="modal-close">&times;</span>
-        </div>
-        <div class="modal-body">
-            <div id="email_preview_modal_content"></div>
-        </div>
-    </div>
-</div>
+?>

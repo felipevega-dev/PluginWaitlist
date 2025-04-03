@@ -247,47 +247,185 @@ function waitlist_export_csv() {
 }
 
 /**
- * Envía notificaciones cuando el stock se repone
+ * Procesa los cambios de stock y envía notificaciones
+ * 
+ * @param int $product_id ID del producto
+ * @param string $status Estado del stock
+ * @param int $variation_id ID de la variación (opcional)
  */
-function waitlist_process_stock_change($product_id) {
-    $product = wc_get_product($product_id);
+function waitlist_process_stock_change($product_id, $status, $variation_id = 0) {
+    global $wpdb;
     
-    if (!$product || !$product->is_in_stock()) {
-        return;
+    // Solo procesar si el producto está en stock
+    if ($status === 'instock') {
+        $table_name = $wpdb->prefix . 'waitlist';
+        $target_id = ($variation_id > 0) ? $variation_id : $product_id;
+        
+        // Obtener suscriptores para este producto/variación
+        $subscribers = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM $table_name WHERE product_id = %d",
+                $target_id
+            )
+        );
+        
+        if (empty($subscribers)) {
+            return;
+        }
+        
+        $product = wc_get_product($product_id);
+        if (!$product) {
+            return;
+        }
+        
+        // Si es una variación, obtener el producto padre para el título
+        $product_title = $product->get_title();
+        if ($variation_id > 0) {
+            $variation = wc_get_product($variation_id);
+            if ($variation) {
+                $product_title = $variation->get_formatted_name();
+            }
+        }
+        
+        $product_url = get_permalink($product_id);
+        $store_name = get_bloginfo('name');
+        $store_url = get_bloginfo('url');
+        $current_date = date_i18n(get_option('date_format'));
+        
+        // Obtener configuración de correo
+        $subject = get_option('waitlist_email_subject', '¡{product_name} está disponible!');
+        $message = get_option('waitlist_email_message', 'Hola, te informamos que {product_name} ya está disponible. Puedes comprarlo haciendo clic en el siguiente enlace: {product_url}');
+        $from_name = get_option('waitlist_email_from_name', get_bloginfo('name'));
+        $from_email = get_option('waitlist_email_from_address', get_option('admin_email'));
+        
+        // Obtener opciones de personalización
+        $logo_url = get_option('waitlist_email_logo', '');
+        $header_color = get_option('waitlist_email_color_header', '#0066CC');
+        $button_color = get_option('waitlist_email_color_button', '#4CAF50');
+        
+        // Crear plantilla de correo con HTML y CSS
+        $email_template = '
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+            <title>{email_subject}</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    margin: 0;
+                    padding: 0;
+                    color: #333333;
+                }
+                .email-container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    border: 1px solid #dddddd;
+                    border-radius: 8px;
+                    overflow: hidden;
+                }
+                .email-header {
+                    background-color: ' . $header_color . ';
+                    color: white;
+                    padding: 20px;
+                    text-align: center;
+                }
+                .logo-container {
+                    text-align: center;
+                    margin-bottom: 10px;
+                }
+                .logo {
+                    max-width: 150px;
+                    height: auto;
+                }
+                .email-body {
+                    padding: 30px 20px;
+                    background-color: #ffffff;
+                }
+                .email-footer {
+                    background-color: #f7f7f7;
+                    padding: 15px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #888888;
+                }
+                .button {
+                    display: inline-block;
+                    background-color: ' . $button_color . ';
+                    color: white;
+                    text-decoration: none;
+                    padding: 12px 25px;
+                    border-radius: 4px;
+                    margin-top: 20px;
+                    margin-bottom: 20px;
+                    font-weight: bold;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="email-container">
+                <div class="email-header">
+                    ' . ($logo_url ? '<div class="logo-container"><img src="' . esc_url($logo_url) . '" alt="' . esc_attr($store_name) . '" class="logo"></div>' : '') . '
+                    <h1>{store_name}</h1>
+                </div>
+                <div class="email-body">
+                    {email_message}
+                    <div style="text-align: center;">
+                        <a href="{product_url}" class="button">Ver Producto</a>
+                    </div>
+                </div>
+                <div class="email-footer">
+                    &copy; ' . date('Y') . ' {store_name}. Todos los derechos reservados.
+                </div>
+            </div>
+        </body>
+        </html>';
+        
+        foreach ($subscribers as $subscriber) {
+            // Personalizar el mensaje para cada suscriptor
+            $personalized_subject = str_replace(
+                array('{product_name}', '{product_url}', '{store_name}', '{store_url}', '{customer_email}', '{date}'),
+                array($product_title, $product_url, $store_name, $store_url, $subscriber->email, $current_date),
+                $subject
+            );
+            
+            // Procesar el contenido del mensaje
+            $personalized_message = str_replace(
+                array('{product_name}', '{product_url}', '{store_name}', '{store_url}', '{customer_email}', '{date}'),
+                array($product_title, $product_url, $store_name, $store_url, $subscriber->email, $current_date),
+                $message
+            );
+            
+            // Insertar mensaje personalizado en plantilla
+            $personalized_html = str_replace(
+                array('{email_subject}', '{email_message}', '{product_url}', '{store_name}'),
+                array($personalized_subject, $personalized_message, $product_url, $store_name),
+                $email_template
+            );
+            
+            // Configurar encabezados del correo
+            $headers = array(
+                'Content-Type: text/html; charset=UTF-8',
+                'From: ' . $from_name . ' <' . $from_email . '>'
+            );
+            
+            // Enviar correo
+            wp_mail($subscriber->email, $personalized_subject, $personalized_html, $headers);
+            
+            // Eliminar al suscriptor de la lista de espera
+            $wpdb->delete(
+                $table_name,
+                array('id' => $subscriber->id),
+                array('%d')
+            );
+        }
     }
-    
-    $subscribers = Waitlist_Model::get_subscribers($product_id);
-    
-    if (empty($subscribers)) {
-        return;
-    }
-    
-    // Configuración de email
-    $subject = get_option('waitlist_email_subject', '¡{product_name} ya está disponible!');
-    $message = get_option('waitlist_email_message', 'Hola, {product_name} ya está disponible en nuestra tienda. ¡No te lo pierdas!');
-    
-    // Reemplazar variables
-    $subject = str_replace('{product_name}', $product->get_name(), $subject);
-    $message = str_replace('{product_name}', $product->get_name(), $message);
-    $message = str_replace('{product_url}', get_permalink($product_id), $message);
-    
-    // Enviar emails
-    $headers = array(
-        'Content-Type: text/html; charset=UTF-8',
-        'From: ' . get_bloginfo('name') . ' <' . get_bloginfo('admin_email') . '>'
-    );
-    
-    foreach ($subscribers as $subscriber) {
-        wp_mail($subscriber->user_email, $subject, $message, $headers);
-    }
-    
-    // Eliminar suscriptores notificados
-    Waitlist_Model::delete_product_subscribers($product_id);
 }
 
 // Conectar con cambios de stock
-add_action('woocommerce_product_set_stock_status', 'waitlist_process_stock_change', 10, 1);
-add_action('woocommerce_variation_set_stock_status', 'waitlist_process_stock_change', 10, 1);
+add_action('woocommerce_product_set_stock_status', 'waitlist_process_stock_change', 10, 3);
+add_action('woocommerce_variation_set_stock_status', 'waitlist_process_stock_change', 10, 3);
 
 /**
  * Maneja la solicitud AJAX para eliminar un suscriptor

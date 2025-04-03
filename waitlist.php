@@ -2,8 +2,8 @@
 /*
 Plugin Name: Lista de Espera WooCommerce
 Description: Permite a los clientes registrarse en una lista de espera para productos sin stock y recibir una notificación por email cuando vuelvan a estar disponibles.
-Version: 3.1.9
-Author: Felipe
+Version: 3.2.0
+Author: Gearlabs
 */
 
 if (!defined('ABSPATH')) {
@@ -81,23 +81,16 @@ function waitlist_deactivate() {
     flush_rewrite_rules();
 }
 
-// Hooks para detectar cambios de stock y enviar notificaciones
-add_action('woocommerce_product_set_stock_status', 'waitlist_product_stock_changed', 10, 3);
-add_action('woocommerce_variation_set_stock_status', 'waitlist_product_stock_changed', 10, 3);
+// Hooks para cambios de stock
+// Disparar cuando un producto simple cambia de estado
+remove_action('woocommerce_product_set_stock_status', 'waitlist_process_stock_change', 10, 3);
+add_action('woocommerce_product_set_stock_status', function($product_id, $status, $product) {
+    waitlist_process_stock_change($product_id, $status, 0);
+}, 10, 3);
 
-/**
- * Manejador de cambio de estado de stock
- *
- * @param int $product_id ID del producto
- * @param string $status Nuevo estado de stock
- * @param object $product Objeto del producto
- */
-function waitlist_product_stock_changed($product_id, $status, $product) {
-    if ($status === 'instock') {
-        // Registrar que se ha ejecutado esta función (para depuración)
-        error_log('waitlist_product_stock_changed: Producto #' . $product_id . ' ahora está en stock.');
-        
-        // Procesar el cambio y enviar notificaciones
-        waitlist_process_stock_change($product_id);
-    }
-}
+// Disparar cuando una variación cambia de estado
+remove_action('woocommerce_variation_set_stock_status', 'waitlist_process_stock_change', 10, 3);
+add_action('woocommerce_variation_set_stock_status', function($variation_id, $status, $product) {
+    $parent_id = wp_get_post_parent_id($variation_id);
+    waitlist_process_stock_change($parent_id, $status, $variation_id);
+}, 10, 3);

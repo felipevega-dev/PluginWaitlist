@@ -149,41 +149,64 @@ class Waitlist_Admin {
      * Renderiza la página de configuración
      */
     public function render_settings_page() {
-        // Definir las opciones a guardar
+        // Opciones a guardar
         $options = array(
-            'waitlist_email_subject' => 'email_subject',
-            'waitlist_email_message' => 'email_message',
-            'waitlist_email_from_name' => 'email_from_name',
-            'waitlist_email_from_address' => 'email_from_address',
             'waitlist_show_variation_count' => 'show_variation_count',
             'waitlist_show_subscriber_emails' => 'show_subscriber_emails',
             'waitlist_max_emails_display' => 'max_emails_display',
             'waitlist_excel_header_color' => 'excel_header_color',
             'waitlist_excel_alternate_color' => 'excel_alternate_color',
-            'waitlist_include_timestamp' => 'include_timestamp'
+            'waitlist_include_timestamp' => 'include_timestamp',
+            'waitlist_email_subject' => 'email_subject',
+            'waitlist_email_message' => 'email_message',
+            'waitlist_email_from_name' => 'email_from_name',
+            'waitlist_email_from_address' => 'email_from_address',
+            'waitlist_email_logo' => 'email_logo',
+            'waitlist_email_color_header' => 'email_color_header',
+            'waitlist_email_color_button' => 'email_color_button',
         );
         
-        // Procesar migración desde YITH
-        if (isset($_POST['migrate_from_yith']) && isset($_POST['waitlist_migration_nonce']) && 
-            wp_verify_nonce($_POST['waitlist_migration_nonce'], 'waitlist_migration')) {
-            $this->process_yith_migration();
+        // Procesar migración desde YITH si se solicita
+        if (isset($_POST['yith_migration']) && isset($_POST['waitlist_migration_nonce']) && wp_verify_nonce($_POST['waitlist_migration_nonce'], 'waitlist_migration')) {
+            $result = $this->process_yith_migration();
+            
+            if (isset($result['success'])) {
+                echo '<div class="notice notice-success is-dismissible"><p>' . $result['success'] . '</p></div>';
+            } else if (isset($result['error'])) {
+                echo '<div class="notice notice-error is-dismissible"><p>' . $result['error'] . '</p></div>';
+            }
         }
         
-        // Procesar importación de suscriptores
-        if (isset($_POST['import_subscribers']) && isset($_FILES['import_file'])) {
-            $this->process_subscriber_import($_FILES['import_file']);
+        // Procesar importación de archivo si se solicita
+        if (isset($_FILES['subscribers_file']) && !empty($_FILES['subscribers_file']['tmp_name']) && 
+            isset($_POST['waitlist_import_nonce']) && wp_verify_nonce($_POST['waitlist_import_nonce'], 'waitlist_import')) {
+            
+            $result = $this->process_subscribers_import();
+            
+            if (isset($result['success'])) {
+                echo '<div class="notice notice-success is-dismissible"><p>' . $result['success'] . '</p></div>';
+            } else if (isset($result['error'])) {
+                echo '<div class="notice notice-error is-dismissible"><p>' . $result['error'] . '</p></div>';
+            }
         }
         
-        // Guardar cambios en la configuración
+        // Guardar configuración
         if (isset($_POST['waitlist_settings_nonce']) && wp_verify_nonce($_POST['waitlist_settings_nonce'], 'waitlist_settings')) {
-            // Guardar opciones de texto
+            // Guardar opciones
             foreach ($options as $option_name => $post_key) {
                 if (isset($_POST[$post_key])) {
-                    if ($post_key === 'email_subject' || $post_key === 'email_message' || $post_key === 'email_from_name' || $post_key === 'email_from_address') {
-                        update_option($option_name, sanitize_text_field($_POST[$post_key]));
+                    if (in_array($post_key, array('email_subject', 'email_message', 'email_from_name', 'email_from_address', 'email_logo'))) {
+                        // Para los campos de texto y HTML
+                        if ($post_key === 'email_message') {
+                            // Para el contenido HTML del editor
+                            update_option($option_name, wp_kses_post($_POST[$post_key]));
+                        } else {
+                            update_option($option_name, sanitize_text_field($_POST[$post_key]));
+                        }
                     } else if ($post_key === 'max_emails_display') {
                         update_option($option_name, intval($_POST[$post_key]));
-                    } else if ($post_key === 'excel_header_color' || $post_key === 'excel_alternate_color') {
+                    } else if (in_array($post_key, array('excel_header_color', 'excel_alternate_color', 'email_color_header', 'email_color_button'))) {
+                        // Para los campos de color
                         update_option($option_name, sanitize_hex_color($_POST[$post_key]));
                     } else {
                         // Opciones de checkbox

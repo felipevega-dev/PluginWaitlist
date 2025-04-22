@@ -2,7 +2,7 @@
 /*
 Plugin Name: Lista de Espera WooCommerce
 Description: Permite a los clientes registrarse en una lista de espera para productos sin stock y recibir una notificación por email cuando vuelvan a estar disponibles.
-Version: 3.2.7
+Version: 3.2.9
 Author: Gearlabs
 */
 

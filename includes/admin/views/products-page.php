@@ -76,6 +76,11 @@
                 <div class="waitlist-navigation">
                     <a href="<?php echo admin_url('admin.php?page=waitlist'); ?>" class="button">&larr; Volver a todos los productos</a>
                 </div>
+                <div class="waitlist-export">
+                    <a href="<?php echo admin_url('admin-post.php?action=waitlist_export_csv&export_type=product_detail&parent_id=' . $parent_id); ?>" class="button excel-export-button">
+                        <span class="dashicons dashicons-media-spreadsheet"></span> Exportar Detalle por Talla
+                    </a>
+                </div>
             </div>
             
             <div class="waitlist-product-info">

@@ -168,31 +168,136 @@ function waitlist_export_csv() {
                 $sheet->setTitle('Detalle por Talla');
                 
                 // Sección 1: Encabezado del producto
-                $sheet->setCellValue('A1', 'Nombre del producto');
-                $sheet->setCellValue('B1', $parent_product->get_name());
+                // Agregar un encabezado mejorado con título más visible
+                $sheet->mergeCells('A1:C1');
+                $sheet->setCellValue('A1', 'REPORTE DE SUSCRIPTORES POR TALLA');
                 
-                $sheet->setCellValue('A2', 'SKU');
-                $sheet->setCellValue('B2', $parent_product->get_sku() ? $parent_product->get_sku() : 'N/A');
+                // Estilo para el título principal
+                $titleStyle = [
+                    'font' => [
+                        'bold' => true,
+                        'size' => 16,
+                        'color' => ['rgb' => 'FFFFFF'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                        'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                    ],
+                    'fill' => [
+                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => 'D50000'], // Rojo corporativo
+                    ],
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM,
+                        ],
+                    ],
+                ];
+                $sheet->getStyle('A1:C1')->applyFromArray($titleStyle);
+                $sheet->getRowDimension(1)->setRowHeight(30);
                 
-                $sheet->setCellValue('A3', 'Total variaciones');
-                $sheet->setCellValue('B3', count($variations));
+                // Información del producto
+                $sheet->setCellValue('A3', 'Nombre del producto');
+                $sheet->setCellValue('B3', $parent_product->get_name());
                 
-                $sheet->setCellValue('A4', 'Total suscriptores');
-                $sheet->setCellValue('B4', $total_subscribers);
+                $sheet->setCellValue('A4', 'SKU');
+                $sheet->setCellValue('B4', $parent_product->get_sku() ? $parent_product->get_sku() : 'N/A');
                 
-                // Aplicar estilo a encabezados de datos
-                $sheet->getStyle('A1:A4')->applyFromArray($dataHeaderStyle);
+                $sheet->setCellValue('A5', 'Total variaciones');
+                $sheet->setCellValue('B5', count($variations));
+                
+                $sheet->setCellValue('A6', 'Total suscriptores');
+                $sheet->setCellValue('B6', $total_subscribers);
+                
+                // Aplicar estilo a encabezados de datos y mejorar apariencia
+                $infoHeaderStyle = [
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => '000000'],
+                    ],
+                    'fill' => [
+                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => 'FFCB05'], // Amarillo corporativo
+                    ],
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        ],
+                    ],
+                ];
+                
+                $infoDataStyle = [
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        ],
+                    ],
+                    'fill' => [
+                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => 'F9F9F9'], // Gris muy claro
+                    ],
+                ];
+                
+                $sheet->getStyle('A3:A6')->applyFromArray($infoHeaderStyle);
+                $sheet->getStyle('B3:B6')->applyFromArray($infoDataStyle);
+                
+                // Intentar agregar un logotipo - si existe el archivo correspondiente
+                try {
+                    $logoPath = plugin_dir_path(dirname(__FILE__)) . 'assets/img/scolari.jpg';
+                    if (file_exists($logoPath)) {
+                        $drawing = new \PhpOffice\PhpSpreadsheet\Worksheet\Drawing();
+                        $drawing->setName('Logo');
+                        $drawing->setDescription('Logo');
+                        $drawing->setPath($logoPath);
+                        $drawing->setCoordinates('C3');
+                        $drawing->setWidth(100);
+                        $drawing->setWorksheet($sheet);
+                        
+                        // Fusionar celdas para el logo
+                        $sheet->mergeCells('C3:C6');
+                    }
+                } catch (\Exception $e) {
+                    error_log('Error al agregar el logo: ' . $e->getMessage());
+                }
+                
+                // Ajustar ancho para mejor presentación
+                $sheet->getColumnDimension('A')->setWidth(20);
+                $sheet->getColumnDimension('B')->setWidth(30);
+                $sheet->getColumnDimension('C')->setWidth(20);
                 
                 // Sección 2: Tabla de suscriptores por talla
-                $sheet->setCellValue('A6', $talla_attribute_name);
-                $sheet->setCellValue('B6', 'Total Suscriptores');
-                $sheet->setCellValue('C6', 'Porcentaje');
+                $sheet->setCellValue('A8', $talla_attribute_name);
+                $sheet->setCellValue('B8', 'Total Suscriptores');
+                $sheet->setCellValue('C8', 'Porcentaje');
                 
-                // Aplicar estilo a cabeceras de tabla
-                $sheet->getStyle('A6:C6')->applyFromArray($headerStyle);
+                // Aplicar estilo a cabeceras de tabla - usar rojo corporativo
+                $headerStyle = [
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => 'FFFFFF'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                    ],
+                    'fill' => [
+                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => 'D50000'], // Rojo corporativo
+                    ],
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        ],
+                    ],
+                ];
+                
+                $sheet->getStyle('A8:C8')->applyFromArray($headerStyle);
+                $sheet->getRowDimension(8)->setRowHeight(20);
+                
+                // Alineación centrada para todas las celdas
+                $sheet->getStyle('A8:C30')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
                 
                 // Escribir datos
-                $row = 7;
+                $row = 9;
                 $row_total = 0;
                 foreach ($talla_totals as $talla_value => $count) {
                     $percentage = $total_subscribers > 0 ? round(($count / $total_subscribers) * 100, 1) : 0;
@@ -211,22 +316,48 @@ function waitlist_export_csv() {
                 }
                 
                 // Agregar fila de total
+                $totalRowStyle = [
+                    'font' => [
+                        'bold' => true,
+                    ],
+                    'fill' => [
+                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => 'FFCB05'], // Amarillo corporativo
+                    ],
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        ],
+                    ],
+                ];
+                
                 $sheet->setCellValue('A' . $row, 'Total');
                 $sheet->setCellValue('B' . $row, $total_subscribers);
-                $sheet->getStyle('A' . $row . ':B' . $row)->applyFromArray($dataHeaderStyle);
+                $sheet->getStyle('A' . $row . ':C' . $row)->applyFromArray($totalRowStyle);
                 
                 try {
                     // Eliminamos la parte del formato condicional que puede estar causando problemas
                     // Solo aplicaremos un color de fondo a la columna de porcentaje para simular visualmente
                     // una barra de datos sin usar el formato condicional
-                    $row_start = 7;
+                    $row_start = 9;
                     for ($i = $row_start; $i < $row; $i++) {
                         $percentage_cell = $sheet->getCell('C' . $i);
                         $percentage_val = floatval(str_replace('%', '', $percentage_cell->getValue()));
                         
-                        // Calcular color basado en el porcentaje (verde más intenso para valores más altos)
-                        $intensity = min(255, max(100, 255 - ($percentage_val * 1.5)));
-                        $rgb = sprintf('%02X%02X%02X', $intensity, 200, $intensity);
+                        // Usar degradado de amarillo a rojo según el porcentaje
+                        if ($percentage_val <= 0) {
+                            $rgb = 'F0F0F0'; // Gris claro para 0%
+                        } elseif ($percentage_val < 20) {
+                            $rgb = 'FFE0E0'; // Rosa muy claro para porcentajes bajos
+                        } elseif ($percentage_val < 40) {
+                            $rgb = 'FFD6AD'; // Naranja claro
+                        } else {
+                            // Calcular degradado entre amarillo y rojo
+                            $red = 255;
+                            $green = max(0, min(203, 203 - (($percentage_val - 40) * 2)));
+                            $blue = max(0, min(5, 5 - ($percentage_val - 40) / 10));
+                            $rgb = sprintf('%02X%02X%02X', $red, $green, $blue);
+                        }
                         
                         $sheet->getStyle('C' . $i)->applyFromArray([
                             'fill' => [
@@ -259,8 +390,8 @@ function waitlist_export_csv() {
                 ];
                 
                 // Aplicar solo si hay datos
-                if ($row > 6) {
-                    $sheet->getStyle('A6:C' . $row)->applyFromArray($styleArray);
+                if ($row > 8) {
+                    $sheet->getStyle('A8:C' . $row)->applyFromArray($styleArray);
                 }
                 
                 // Nombre del archivo

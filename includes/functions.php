@@ -106,296 +106,501 @@ function waitlist_export_csv() {
                 // Depuración
                 error_log('Variaciones encontradas: ' . count($variations));
                 
-                // Calcular el total de suscriptores
-                $total_subscribers = 0;
-                foreach ($variations as $variation) {
-                    $total_subscribers += $variation->subscribers_count;
-                }
-                
-                // Buscar el atributo "Talla" o usar el primer atributo disponible
-                $talla_variations = array();
-                $talla_attribute_name = 'Talla';
-                
-                // Verificar si existe el atributo "Talla"
-                $has_talla = false;
-                foreach ($variations as $variation) {
-                    if (isset($variation->main_attribute_name) && $variation->main_attribute_name === 'Talla') {
-                        $has_talla = true;
-                        break;
-                    }
-                }
-                
-                // Si no hay atributo "Talla", usar el primer atributo disponible
-                if (!$has_talla && !empty($variations) && isset($variations[0]->main_attribute_name)) {
-                    $talla_attribute_name = $variations[0]->main_attribute_name;
-                }
-                
-                // Depuración
-                error_log('Atributo usado: ' . $talla_attribute_name);
-                
-                // Agrupar por talla
-                foreach ($variations as $variation) {
-                    if (isset($variation->main_attribute_name) && $variation->main_attribute_name === $talla_attribute_name) {
-                        $talla_variations[] = $variation;
-                    }
-                }
-                
-                // Depuración
-                error_log('Variaciones por talla encontradas: ' . count($talla_variations));
-                
-                // Calcular totales por talla
-                $talla_totals = array();
-                foreach ($talla_variations as $variation) {
-                    if (!isset($variation->main_attribute_value)) {
-                        // Depuración
-                        error_log('Variación sin valor de atributo: ' . print_r($variation, true));
-                        continue;
+                // Verificar si hay variaciones
+                if (empty($variations) || count($variations) === 0) {
+                    // Es un producto de talla única, obtener suscriptores directos
+                    $subscribers = Waitlist_Model::get_subscribers($parent_id);
+                    
+                    if (empty($subscribers)) {
+                        wp_die('No hay suscriptores para exportar.', 'Lista de espera', array('back_link' => true));
+                        return;
                     }
                     
-                    $talla_value = $variation->main_attribute_value;
-                    
-                    if (!isset($talla_totals[$talla_value])) {
-                        $talla_totals[$talla_value] = 0;
-                    }
-                    
-                    $talla_totals[$talla_value] += $variation->subscribers_count;
-                }
-                
-                // Ordenar de mayor a menor
-                arsort($talla_totals);
-                
-                // Configurar título de la hoja
-                $sheet->setTitle('Detalle por Talla');
-                
-                // Sección 1: Encabezado del producto
-                // Agregar un encabezado mejorado con título más visible
-                $sheet->mergeCells('A1:C1');
-                $sheet->setCellValue('A1', 'REPORTE DE SUSCRIPTORES POR TALLA');
-                
-                // Estilo para el título principal
-                $titleStyle = [
-                    'font' => [
-                        'bold' => true,
-                        'size' => 16,
-                        'color' => ['rgb' => 'FFFFFF'],
-                    ],
-                    'alignment' => [
-                        'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                        'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
-                    ],
-                    'fill' => [
-                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'D50000'], // Rojo corporativo
-                    ],
-                    'borders' => [
-                        'allBorders' => [
-                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM,
-                        ],
-                    ],
-                ];
-                $sheet->getStyle('A1:C1')->applyFromArray($titleStyle);
-                $sheet->getRowDimension(1)->setRowHeight(30);
-                
-                // Información del producto
-                $sheet->setCellValue('A3', 'Nombre del producto');
-                $sheet->setCellValue('B3', $parent_product->get_name());
-                
-                $sheet->setCellValue('A4', 'SKU');
-                $sheet->setCellValue('B4', $parent_product->get_sku() ? $parent_product->get_sku() : 'N/A');
-                
-                $sheet->setCellValue('A5', 'Total variaciones');
-                $sheet->setCellValue('B5', count($variations));
-                
-                $sheet->setCellValue('A6', 'Total suscriptores');
-                $sheet->setCellValue('B6', $total_subscribers);
-                
-                // Aplicar estilo a encabezados de datos y mejorar apariencia
-                $infoHeaderStyle = [
-                    'font' => [
-                        'bold' => true,
-                        'color' => ['rgb' => '000000'],
-                    ],
-                    'fill' => [
-                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'FFCB05'], // Amarillo corporativo
-                    ],
-                    'borders' => [
-                        'allBorders' => [
-                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                        ],
-                    ],
-                ];
-                
-                $infoDataStyle = [
-                    'borders' => [
-                        'allBorders' => [
-                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                        ],
-                    ],
-                    'fill' => [
-                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'F9F9F9'], // Gris muy claro
-                    ],
-                ];
-                
-                $sheet->getStyle('A3:A6')->applyFromArray($infoHeaderStyle);
-                $sheet->getStyle('B3:B6')->applyFromArray($infoDataStyle);
-                
-                // Intentar agregar un logotipo - si existe el archivo correspondiente
-                try {
-                    $logoPath = plugin_dir_path(dirname(__FILE__)) . 'assets/img/scolari.jpg';
-                    if (file_exists($logoPath)) {
-                        $drawing = new \PhpOffice\PhpSpreadsheet\Worksheet\Drawing();
-                        $drawing->setName('Logo');
-                        $drawing->setDescription('Logo');
-                        $drawing->setPath($logoPath);
-                        $drawing->setCoordinates('C3');
-                        $drawing->setWidth(100);
-                        $drawing->setWorksheet($sheet);
-                        
-                        // Fusionar celdas para el logo
-                        $sheet->mergeCells('C3:C6');
-                    }
-                } catch (\Exception $e) {
-                    error_log('Error al agregar el logo: ' . $e->getMessage());
-                }
-                
-                // Ajustar ancho para mejor presentación
-                $sheet->getColumnDimension('A')->setWidth(20);
-                $sheet->getColumnDimension('B')->setWidth(30);
-                $sheet->getColumnDimension('C')->setWidth(20);
-                
-                // Sección 2: Tabla de suscriptores por talla
-                $sheet->setCellValue('A8', $talla_attribute_name);
-                $sheet->setCellValue('B8', 'Total Suscriptores');
-                $sheet->setCellValue('C8', 'Porcentaje');
-                
-                // Aplicar estilo a cabeceras de tabla - usar rojo corporativo
-                $headerStyle = [
-                    'font' => [
-                        'bold' => true,
-                        'color' => ['rgb' => 'FFFFFF'],
-                    ],
-                    'alignment' => [
-                        'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                    ],
-                    'fill' => [
-                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'D50000'], // Rojo corporativo
-                    ],
-                    'borders' => [
-                        'allBorders' => [
-                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                        ],
-                    ],
-                ];
-                
-                $sheet->getStyle('A8:C8')->applyFromArray($headerStyle);
-                $sheet->getRowDimension(8)->setRowHeight(20);
-                
-                // Alineación centrada para todas las celdas
-                $sheet->getStyle('A8:C30')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                
-                // Escribir datos
-                $row = 9;
-                $row_total = 0;
-                foreach ($talla_totals as $talla_value => $count) {
-                    $percentage = $total_subscribers > 0 ? round(($count / $total_subscribers) * 100, 1) : 0;
-                    
-                    $sheet->setCellValue('A' . $row, $talla_value);
-                    $sheet->setCellValue('B' . $row, $count);
-                    $sheet->setCellValue('C' . $row, $percentage . '%');
-                    
-                    // Aplicar estilo a filas alternas
-                    if ($row % 2 == 0) {
-                        $sheet->getStyle('A' . $row . ':C' . $row)->applyFromArray($evenRowStyle);
-                    }
-                    
-                    $row++;
-                    $row_total++;
-                }
-                
-                // Agregar fila de total
-                $totalRowStyle = [
-                    'font' => [
-                        'bold' => true,
-                    ],
-                    'fill' => [
-                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'FFCB05'], // Amarillo corporativo
-                    ],
-                    'borders' => [
-                        'allBorders' => [
-                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                        ],
-                    ],
-                ];
-                
-                $sheet->setCellValue('A' . $row, 'Total');
-                $sheet->setCellValue('B' . $row, $total_subscribers);
-                $sheet->getStyle('A' . $row . ':C' . $row)->applyFromArray($totalRowStyle);
-                
-                try {
-                    // Eliminamos la parte del formato condicional que puede estar causando problemas
-                    // Solo aplicaremos un color de fondo a la columna de porcentaje para simular visualmente
-                    // una barra de datos sin usar el formato condicional
-                    $row_start = 9;
-                    for ($i = $row_start; $i < $row; $i++) {
-                        $percentage_cell = $sheet->getCell('C' . $i);
-                        $percentage_val = floatval(str_replace('%', '', $percentage_cell->getValue()));
-                        
-                        // Usar degradado de amarillo a rojo según el porcentaje
-                        if ($percentage_val <= 0) {
-                            $rgb = 'F0F0F0'; // Gris claro para 0%
-                        } elseif ($percentage_val < 20) {
-                            $rgb = 'FFE0E0'; // Rosa muy claro para porcentajes bajos
-                        } elseif ($percentage_val < 40) {
-                            $rgb = 'FFD6AD'; // Naranja claro
-                        } else {
-                            // Calcular degradado entre amarillo y rojo
-                            $red = 255;
-                            $green = max(0, min(203, 203 - (($percentage_val - 40) * 2)));
-                            $blue = max(0, min(5, 5 - ($percentage_val - 40) / 10));
-                            $rgb = sprintf('%02X%02X%02X', $red, $green, $blue);
+                    // Agrupar por email y quedarse con la suscripción más reciente
+                    $unique_subscribers = array();
+                    foreach ($subscribers as $subscriber) {
+                        $timestamp = 0;
+                        if (is_numeric($subscriber->created_at) && $subscriber->created_at > 946684800) {
+                            $timestamp = $subscriber->created_at;
+                        } else if (strtotime($subscriber->created_at) > 946684800) {
+                            $timestamp = strtotime($subscriber->created_at);
                         }
                         
-                        $sheet->getStyle('C' . $i)->applyFromArray([
-                            'fill' => [
-                                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                                'startColor' => ['rgb' => $rgb],
-                            ],
-                        ]);
+                        if (!isset($unique_subscribers[$subscriber->email]) || 
+                            $timestamp > $unique_subscribers[$subscriber->email]['timestamp']) {
+                            $unique_subscribers[$subscriber->email] = array(
+                                'timestamp' => $timestamp,
+                                'created_at' => $subscriber->created_at,
+                                'id' => $subscriber->id
+                            );
+                        }
                     }
-                } catch (\Exception $e) {
-                    // Si hay error en el formato condicional, lo registramos pero continuamos
-                    error_log('Error al aplicar formato condicional: ' . $e->getMessage());
-                }
-                
-                // Autoajustar columnas
-                foreach (range('A', 'C') as $col) {
-                    $sheet->getColumnDimension($col)->setAutoSize(true);
-                }
-                
-                // Agregar bordes a la tabla
-                $styleArray = [
-                    'borders' => [
-                        'allBorders' => [
-                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                            'color' => ['argb' => 'FF000000'],
+                    
+                    // Total de suscriptores únicos
+                    $total_subscribers = count($unique_subscribers);
+                    
+                    // Configurar título de la hoja
+                    $sheet->setTitle('Producto Talla Única');
+                    
+                    // Agregar un encabezado mejorado con título más visible
+                    $sheet->mergeCells('A1:C1');
+                    $sheet->setCellValue('A1', 'REPORTE DE SUSCRIPTORES - TALLA ÚNICA');
+                    
+                    // Estilo para el título principal
+                    $titleStyle = [
+                        'font' => [
+                            'bold' => true,
+                            'size' => 16,
+                            'color' => ['rgb' => 'FFFFFF'],
                         ],
-                    ],
-                    'alignment' => [
-                        'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                    ],
-                ];
-                
-                // Aplicar solo si hay datos
-                if ($row > 8) {
-                    $sheet->getStyle('A8:C' . $row)->applyFromArray($styleArray);
+                        'alignment' => [
+                            'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                            'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                        ],
+                        'fill' => [
+                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'D50000'], // Rojo corporativo
+                        ],
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM,
+                            ],
+                        ],
+                    ];
+                    $sheet->getStyle('A1:C1')->applyFromArray($titleStyle);
+                    $sheet->getRowDimension(1)->setRowHeight(30);
+                    
+                    // Información del producto
+                    $sheet->setCellValue('A3', 'Nombre del producto');
+                    $sheet->setCellValue('B3', $parent_product->get_name());
+                    
+                    $sheet->setCellValue('A4', 'SKU');
+                    $sheet->setCellValue('B4', $parent_product->get_sku() ? $parent_product->get_sku() : 'N/A');
+                    
+                    $sheet->setCellValue('A5', 'Total suscriptores únicos');
+                    $sheet->setCellValue('B5', $total_subscribers);
+                    
+                    // Aplicar estilo a encabezados de datos y mejorar apariencia
+                    $infoHeaderStyle = [
+                        'font' => [
+                            'bold' => true,
+                            'color' => ['rgb' => '000000'],
+                        ],
+                        'fill' => [
+                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'FFCB05'], // Amarillo corporativo
+                        ],
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                            ],
+                        ],
+                    ];
+                    
+                    $infoDataStyle = [
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                            ],
+                        ],
+                        'fill' => [
+                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'F9F9F9'], // Gris muy claro
+                        ],
+                    ];
+                    
+                    $sheet->getStyle('A3:A5')->applyFromArray($infoHeaderStyle);
+                    $sheet->getStyle('B3:B5')->applyFromArray($infoDataStyle);
+                    
+                    // Intentar agregar un logotipo - si existe el archivo correspondiente
+                    try {
+                        $logoPath = plugin_dir_path(dirname(__FILE__)) . 'assets/img/scolari.jpg';
+                        if (file_exists($logoPath)) {
+                            $drawing = new \PhpOffice\PhpSpreadsheet\Worksheet\Drawing();
+                            $drawing->setName('Logo');
+                            $drawing->setDescription('Logo');
+                            $drawing->setPath($logoPath);
+                            $drawing->setCoordinates('C3');
+                            $drawing->setWidth(100);
+                            $drawing->setWorksheet($sheet);
+                            
+                            // Fusionar celdas para el logo
+                            $sheet->mergeCells('C3:C5');
+                        }
+                    } catch (\Exception $e) {
+                        error_log('Error al agregar el logo: ' . $e->getMessage());
+                    }
+                    
+                    // Ajustar ancho para mejor presentación
+                    $sheet->getColumnDimension('A')->setWidth(20);
+                    $sheet->getColumnDimension('B')->setWidth(30);
+                    $sheet->getColumnDimension('C')->setWidth(20);
+                    
+                    // Tabla de suscriptores
+                    $sheet->setCellValue('A7', 'Email');
+                    $sheet->setCellValue('B7', 'Fecha de suscripción');
+                    
+                    // Aplicar estilo a cabeceras de tabla - usar rojo corporativo
+                    $headerStyle = [
+                        'font' => [
+                            'bold' => true,
+                            'color' => ['rgb' => 'FFFFFF'],
+                        ],
+                        'alignment' => [
+                            'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                        ],
+                        'fill' => [
+                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'D50000'], // Rojo corporativo
+                        ],
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                            ],
+                        ],
+                    ];
+                    
+                    $sheet->getStyle('A7:B7')->applyFromArray($headerStyle);
+                    
+                    // Escribir datos de suscriptores
+                    $row = 8;
+                    foreach ($unique_subscribers as $email => $data) {
+                        $created_date = '';
+                        if (is_numeric($data['created_at']) && $data['created_at'] > 946684800) {
+                            $created_date = date('Y-m-d H:i:s', $data['created_at']);
+                        } else if (strtotime($data['created_at']) > 946684800) {
+                            $created_date = date('Y-m-d H:i:s', strtotime($data['created_at']));
+                        } else {
+                            $created_date = 'N/A';
+                        }
+                        
+                        $sheet->setCellValue('A' . $row, $email);
+                        $sheet->setCellValue('B' . $row, $created_date);
+                        
+                        // Aplicar estilo a filas alternas
+                        if ($row % 2 == 0) {
+                            $sheet->getStyle('A' . $row . ':B' . $row)->applyFromArray($evenRowStyle);
+                        }
+                        
+                        $row++;
+                    }
+                    
+                    // Aplicar bordes y centrar
+                    $styleArray = [
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                                'color' => ['argb' => 'FF000000'],
+                            ],
+                        ],
+                        'alignment' => [
+                            'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                        ],
+                    ];
+                    
+                    $sheet->getStyle('A7:B' . ($row-1))->applyFromArray($styleArray);
+                    
+                    // Autoajustar columnas
+                    foreach (range('A', 'B') as $col) {
+                        $sheet->getColumnDimension($col)->setAutoSize(true);
+                    }
+                    
+                    // Nombre del archivo
+                    $filename = "suscriptores_" . sanitize_title($parent_product->get_name()) . "_" . ($include_timestamp ? date('Y-m-d_H-i-s') : date('Y-m-d')) . ".xlsx";
+                } else {
+                    // Producto con variaciones (código existente)
+                    
+                    // Calcular el total de suscriptores
+                    $total_subscribers = 0;
+                    foreach ($variations as $variation) {
+                        $total_subscribers += $variation->subscribers_count;
+                    }
+                    
+                    // Buscar el atributo "Talla" o usar el primer atributo disponible
+                    $talla_variations = array();
+                    $talla_attribute_name = 'Talla';
+                    
+                    // Verificar si existe el atributo "Talla"
+                    $has_talla = false;
+                    foreach ($variations as $variation) {
+                        if (isset($variation->main_attribute_name) && $variation->main_attribute_name === 'Talla') {
+                            $has_talla = true;
+                            break;
+                        }
+                    }
+                    
+                    // Si no hay atributo "Talla", usar el primer atributo disponible
+                    if (!$has_talla && !empty($variations) && isset($variations[0]->main_attribute_name)) {
+                        $talla_attribute_name = $variations[0]->main_attribute_name;
+                    }
+                    
+                    // Depuración
+                    error_log('Atributo usado: ' . $talla_attribute_name);
+                    
+                    // Agrupar por talla
+                    foreach ($variations as $variation) {
+                        if (isset($variation->main_attribute_name) && $variation->main_attribute_name === $talla_attribute_name) {
+                            $talla_variations[] = $variation;
+                        }
+                    }
+                    
+                    // Depuración
+                    error_log('Variaciones por talla encontradas: ' . count($talla_variations));
+                    
+                    // Calcular totales por talla
+                    $talla_totals = array();
+                    foreach ($talla_variations as $variation) {
+                        if (!isset($variation->main_attribute_value)) {
+                            // Depuración
+                            error_log('Variación sin valor de atributo: ' . print_r($variation, true));
+                            continue;
+                        }
+                        
+                        $talla_value = $variation->main_attribute_value;
+                        
+                        if (!isset($talla_totals[$talla_value])) {
+                            $talla_totals[$talla_value] = 0;
+                        }
+                        
+                        $talla_totals[$talla_value] += $variation->subscribers_count;
+                    }
+                    
+                    // Ordenar de mayor a menor
+                    arsort($talla_totals);
+                    
+                    // Configurar título de la hoja
+                    $sheet->setTitle('Detalle por Talla');
+                    
+                    // Sección 1: Encabezado del producto
+                    // Agregar un encabezado mejorado con título más visible
+                    $sheet->mergeCells('A1:C1');
+                    $sheet->setCellValue('A1', 'REPORTE DE SUSCRIPTORES POR TALLA');
+                    
+                    // Estilo para el título principal
+                    $titleStyle = [
+                        'font' => [
+                            'bold' => true,
+                            'size' => 16,
+                            'color' => ['rgb' => 'FFFFFF'],
+                        ],
+                        'alignment' => [
+                            'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                            'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                        ],
+                        'fill' => [
+                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'D50000'], // Rojo corporativo
+                        ],
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM,
+                            ],
+                        ],
+                    ];
+                    $sheet->getStyle('A1:C1')->applyFromArray($titleStyle);
+                    $sheet->getRowDimension(1)->setRowHeight(30);
+                    
+                    // Información del producto
+                    $sheet->setCellValue('A3', 'Nombre del producto');
+                    $sheet->setCellValue('B3', $parent_product->get_name());
+                    
+                    $sheet->setCellValue('A4', 'SKU');
+                    $sheet->setCellValue('B4', $parent_product->get_sku() ? $parent_product->get_sku() : 'N/A');
+                    
+                    $sheet->setCellValue('A5', 'Total variaciones');
+                    $sheet->setCellValue('B5', count($variations));
+                    
+                    $sheet->setCellValue('A6', 'Total suscriptores');
+                    $sheet->setCellValue('B6', $total_subscribers);
+                    
+                    // Aplicar estilo a encabezados de datos y mejorar apariencia
+                    $infoHeaderStyle = [
+                        'font' => [
+                            'bold' => true,
+                            'color' => ['rgb' => '000000'],
+                        ],
+                        'fill' => [
+                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'FFCB05'], // Amarillo corporativo
+                        ],
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                            ],
+                        ],
+                    ];
+                    
+                    $infoDataStyle = [
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                            ],
+                        ],
+                        'fill' => [
+                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'F9F9F9'], // Gris muy claro
+                        ],
+                    ];
+                    
+                    $sheet->getStyle('A3:A6')->applyFromArray($infoHeaderStyle);
+                    $sheet->getStyle('B3:B6')->applyFromArray($infoDataStyle);
+                    
+                    // Intentar agregar un logotipo - si existe el archivo correspondiente
+                    try {
+                        $logoPath = plugin_dir_path(dirname(__FILE__)) . 'assets/img/scolari.jpg';
+                        if (file_exists($logoPath)) {
+                            $drawing = new \PhpOffice\PhpSpreadsheet\Worksheet\Drawing();
+                            $drawing->setName('Logo');
+                            $drawing->setDescription('Logo');
+                            $drawing->setPath($logoPath);
+                            $drawing->setCoordinates('C3');
+                            $drawing->setWidth(100);
+                            $drawing->setWorksheet($sheet);
+                            
+                            // Fusionar celdas para el logo
+                            $sheet->mergeCells('C3:C6');
+                        }
+                    } catch (\Exception $e) {
+                        error_log('Error al agregar el logo: ' . $e->getMessage());
+                    }
+                    
+                    // Ajustar ancho para mejor presentación
+                    $sheet->getColumnDimension('A')->setWidth(20);
+                    $sheet->getColumnDimension('B')->setWidth(30);
+                    $sheet->getColumnDimension('C')->setWidth(20);
+                    
+                    // Sección 2: Tabla de suscriptores por talla
+                    $sheet->setCellValue('A8', $talla_attribute_name);
+                    $sheet->setCellValue('B8', 'Total Suscriptores');
+                    $sheet->setCellValue('C8', 'Porcentaje');
+                    
+                    // Aplicar estilo a cabeceras de tabla - usar rojo corporativo
+                    $headerStyle = [
+                        'font' => [
+                            'bold' => true,
+                            'color' => ['rgb' => 'FFFFFF'],
+                        ],
+                        'alignment' => [
+                            'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                        ],
+                        'fill' => [
+                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'D50000'], // Rojo corporativo
+                        ],
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                            ],
+                        ],
+                    ];
+                    
+                    $sheet->getStyle('A8:C8')->applyFromArray($headerStyle);
+                    $sheet->getRowDimension(8)->setRowHeight(20);
+                    
+                    // Alineación centrada para todas las celdas
+                    $sheet->getStyle('A8:C30')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                    
+                    // Escribir datos
+                    $row = 9;
+                    $row_total = 0;
+                    foreach ($talla_totals as $talla_value => $count) {
+                        $percentage = $total_subscribers > 0 ? round(($count / $total_subscribers) * 100, 1) : 0;
+                        
+                        $sheet->setCellValue('A' . $row, $talla_value);
+                        $sheet->setCellValue('B' . $row, $count);
+                        $sheet->setCellValue('C' . $row, $percentage . '%');
+                        
+                        // Aplicar estilo a filas alternas
+                        if ($row % 2 == 0) {
+                            $sheet->getStyle('A' . $row . ':C' . $row)->applyFromArray($evenRowStyle);
+                        }
+                        
+                        $row++;
+                        $row_total++;
+                    }
+                    
+                    // Agregar fila de total
+                    $totalRowStyle = [
+                        'font' => [
+                            'bold' => true,
+                        ],
+                        'fill' => [
+                            'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'FFCB05'], // Amarillo corporativo
+                        ],
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                            ],
+                        ],
+                    ];
+                    
+                    $sheet->setCellValue('A' . $row, 'Total');
+                    $sheet->setCellValue('B' . $row, $total_subscribers);
+                    $sheet->getStyle('A' . $row . ':C' . $row)->applyFromArray($totalRowStyle);
+                    
+                    try {
+                        // Eliminamos la parte del formato condicional que puede estar causando problemas
+                        // Solo aplicaremos un color de fondo a la columna de porcentaje para simular visualmente
+                        // una barra de datos sin usar el formato condicional
+                        $row_start = 9;
+                        for ($i = $row_start; $i < $row; $i++) {
+                            $percentage_cell = $sheet->getCell('C' . $i);
+                            $percentage_val = floatval(str_replace('%', '', $percentage_cell->getValue()));
+                            
+                            // Usar degradado de amarillo a rojo según el porcentaje
+                            if ($percentage_val <= 0) {
+                                $rgb = 'F0F0F0'; // Gris claro para 0%
+                            } elseif ($percentage_val < 20) {
+                                $rgb = 'FFE0E0'; // Rosa muy claro para porcentajes bajos
+                            } elseif ($percentage_val < 40) {
+                                $rgb = 'FFD6AD'; // Naranja claro
+                            } else {
+                                // Calcular degradado entre amarillo y rojo
+                                $red = 255;
+                                $green = max(0, min(203, 203 - (($percentage_val - 40) * 2)));
+                                $blue = max(0, min(5, 5 - ($percentage_val - 40) / 10));
+                                $rgb = sprintf('%02X%02X%02X', $red, $green, $blue);
+                            }
+                            
+                            $sheet->getStyle('C' . $i)->applyFromArray([
+                                'fill' => [
+                                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                    'startColor' => ['rgb' => $rgb],
+                                ],
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        // Si hay error en el formato condicional, lo registramos pero continuamos
+                        error_log('Error al aplicar formato condicional: ' . $e->getMessage());
+                    }
+                    
+                    // Autoajustar columnas
+                    foreach (range('A', 'C') as $col) {
+                        $sheet->getColumnDimension($col)->setAutoSize(true);
+                    }
+                    
+                    // Agregar bordes a la tabla
+                    $styleArray = [
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                                'color' => ['argb' => 'FF000000'],
+                            ],
+                        ],
+                        'alignment' => [
+                            'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                        ],
+                    ];
+                    
+                    // Aplicar solo si hay datos
+                    if ($row > 8) {
+                        $sheet->getStyle('A8:C' . $row)->applyFromArray($styleArray);
+                    }
+                    
+                    // Nombre del archivo
+                    $filename = "detalle_tallas_" . sanitize_title($parent_product->get_name()) . "_" . ($include_timestamp ? date('Y-m-d_H-i-s') : date('Y-m-d')) . ".xlsx";
                 }
-                
-                // Nombre del archivo
-                $filename = "detalle_tallas_" . sanitize_title($parent_product->get_name()) . "_" . ($include_timestamp ? date('Y-m-d_H-i-s') : date('Y-m-d')) . ".xlsx";
             } catch (\Exception $e) {
                 error_log('Error en exportación de detalle por talla: ' . $e->getMessage());
                 wp_die('Error al crear el Excel: ' . esc_html($e->getMessage()), 'Error de exportación', array('back_link' => true));

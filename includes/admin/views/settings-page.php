@@ -1,53 +1,50 @@
 <?php
-// Evitamos el acceso directo
+// Protección contra acceso directo
 if (!defined('ABSPATH')) {
     exit;
 }
+
+// Comprobar si se han guardado las opciones
+$settings_updated = false;
+if (isset($_GET['settings-updated']) && $_GET['settings-updated'] == 'true') {
+    $settings_updated = true;
+}
 ?>
-<div class="wrap waitlist-container">
-    <h1>Configuración de Lista de Espera</h1>
+
+<div class="wrap">
+    <h1>Lista de Espera - Configuración</h1>
     
-    <div class="notice notice-info">
-        <p><strong>Nota:</strong> Este sistema ahora gestiona de forma independiente toda la funcionalidad de lista de espera. La personalización de los correos electrónicos y otras opciones están disponibles aquí.</p>
-    </div>
+    <?php if ($settings_updated): ?>
+        <div class="notice notice-success is-dismissible">
+            <p>¡Configuración guardada con éxito!</p>
+        </div>
+    <?php endif; ?>
     
-    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" id="waitlist-settings-form">
-        <?php wp_nonce_field('waitlist_settings', 'waitlist_settings_nonce'); ?>
-        <input type="hidden" name="action" value="save_waitlist_settings">
+    <form method="post" action="options.php">
+        <?php settings_fields('waitlist_settings_group'); ?>
         
         <div class="waitlist-settings-section">
-            <h2>Configuración de Visualización</h2>
+            <h2>Configuración General</h2>
             <table class="form-table">
-                <tr>
-                    <th scope="row">
-                        <label for="show_variation_count">Mostrar conteo de variaciones</label>
-                    </th>
-                    <td>
-                        <input type="checkbox" id="show_variation_count" name="show_variation_count" value="1" <?php checked(get_option('waitlist_show_variation_count', '1'), '1'); ?>>
-                        <p class="description">
-                            Mostrar el número de variaciones en la tabla de productos.
-                        </p>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row">
-                        <label for="show_subscriber_emails">Mostrar emails en la tabla</label>
-                    </th>
-                    <td>
-                        <input type="checkbox" id="show_subscriber_emails" name="show_subscriber_emails" value="1" <?php checked(get_option('waitlist_show_subscriber_emails', '1'), '1'); ?>>
-                        <p class="description">
-                            Mostrar los emails de los suscriptores en la tabla de variaciones.
-                        </p>
-                    </td>
-                </tr>
                 <tr>
                     <th scope="row">
                         <label for="max_emails_display">Máximo de emails a mostrar</label>
                     </th>
                     <td>
-                        <input type="number" id="max_emails_display" name="max_emails_display" value="<?php echo esc_attr(get_option('waitlist_max_emails_display', '5')); ?>" min="1" max="20" class="small-text">
+                        <input type="number" id="max_emails_display" name="max_emails_display" value="<?php echo esc_attr(get_option('waitlist_max_emails_display', '50')); ?>" min="1" max="500" class="small-text">
                         <p class="description">
-                            Número máximo de emails a mostrar en la tabla antes de resumir.
+                            Número máximo de emails que se mostrarán en la tabla de suscriptores. Un número muy alto puede ralentizar la página.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">
+                        <label for="show_subscriber_count">Mostrar contador de suscriptores</label>
+                    </th>
+                    <td>
+                        <input type="checkbox" id="show_subscriber_count" name="show_subscriber_count" value="1" <?php checked(get_option('waitlist_show_subscriber_count', '1'), '1'); ?>>
+                        <p class="description">
+                            Mostrar el número total de suscriptores en la columna de WooCommerce.
                         </p>
                     </td>
                 </tr>
@@ -55,38 +52,102 @@ if (!defined('ABSPATH')) {
         </div>
         
         <div class="waitlist-settings-section">
-            <h2>Configuración de Exportación</h2>
+            <h2>Configuración de Exportación a Excel</h2>
             <table class="form-table">
                 <tr>
                     <th scope="row">
-                        <label for="excel_header_color">Color de cabecera en Excel</label>
+                        <label for="excel_logo">Logo para los archivos Excel</label>
                     </th>
                     <td>
-                        <input type="color" id="excel_header_color" name="excel_header_color" value="<?php echo esc_attr(get_option('waitlist_excel_header_color', '#0066CC')); ?>" class="color-picker">
+                        <div class="waitlist-logo-uploader">
+                            <?php
+                            $logo_url = get_option('waitlist_excel_logo', '');
+                            ?>
+                            <div class="logo-preview-wrapper" style="margin-bottom: 10px;">
+                                <?php if (!empty($logo_url)): ?>
+                                    <img src="<?php echo esc_url($logo_url); ?>" alt="Logo de Excel" style="max-width: 300px; max-height: 100px;" />
+                                <?php endif; ?>
+                            </div>
+                            <input type="hidden" name="excel_logo" id="excel_logo" value="<?php echo esc_attr($logo_url); ?>" />
+                            <button type="button" class="button upload-excel-logo-button">Seleccionar logo</button>
+                            <?php if (!empty($logo_url)): ?>
+                                <button type="button" class="button remove-excel-logo-button">Quitar logo</button>
+                            <?php endif; ?>
+                            <p class="description">
+                                Logo que se mostrará en los archivos Excel exportados. Tamaño recomendado: 300x100 px.
+                            </p>
+                        </div>
+                        <script>
+                            jQuery(document).ready(function($) {
+                                // Para el selector de logo Excel
+                                var excelLogoUploader;
+                                
+                                $('.upload-excel-logo-button').click(function(e) {
+                                    e.preventDefault();
+                                    
+                                    if (excelLogoUploader) {
+                                        excelLogoUploader.open();
+                                        return;
+                                    }
+                                    
+                                    excelLogoUploader = wp.media({
+                                        title: 'Seleccionar logo para Excel',
+                                        button: {
+                                            text: 'Usar este logo'
+                                        },
+                                        multiple: false
+                                    });
+                                    
+                                    excelLogoUploader.on('select', function() {
+                                        var attachment = excelLogoUploader.state().get('selection').first().toJSON();
+                                        $('#excel_logo').val(attachment.url);
+                                        $('.logo-preview-wrapper').html('<img src="' + attachment.url + '" alt="Logo de Excel" style="max-width: 300px; max-height: 100px;" />');
+                                        $('.upload-excel-logo-button').after('<button type="button" class="button remove-excel-logo-button">Quitar logo</button>');
+                                    });
+                                    
+                                    excelLogoUploader.open();
+                                });
+                                
+                                $(document).on('click', '.remove-excel-logo-button', function(e) {
+                                    e.preventDefault();
+                                    $('#excel_logo').val('');
+                                    $('.logo-preview-wrapper').html('');
+                                    $(this).remove();
+                                });
+                            });
+                        </script>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">
+                        <label for="excel_color_header">Color de cabecera</label>
+                    </th>
+                    <td>
+                        <input type="color" id="excel_color_header" name="excel_color_header" value="<?php echo esc_attr(get_option('waitlist_excel_color_header', '#D50000')); ?>">
                         <p class="description">
-                            Color de fondo para las cabeceras en los archivos Excel exportados.
+                            Color de fondo de la cabecera en los archivos Excel.
                         </p>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row">
-                        <label for="excel_alternate_color">Color de filas alternas</label>
+                        <label for="excel_color_text">Color del texto</label>
                     </th>
                     <td>
-                        <input type="color" id="excel_alternate_color" name="excel_alternate_color" value="<?php echo esc_attr(get_option('waitlist_excel_alternate_color', '#F2F2F2')); ?>" class="color-picker">
+                        <input type="color" id="excel_color_text" name="excel_color_text" value="<?php echo esc_attr(get_option('waitlist_excel_color_text', '#FFFFFF')); ?>">
                         <p class="description">
-                            Color de fondo para las filas alternas en los archivos Excel exportados.
+                            Color del texto en la cabecera de los archivos Excel.
                         </p>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row">
-                        <label for="include_timestamp">Incluir fecha y hora en nombre de archivo</label>
+                        <label for="excel_filename">Nombre del archivo</label>
                     </th>
                     <td>
-                        <input type="checkbox" id="include_timestamp" name="include_timestamp" value="1" <?php checked(get_option('waitlist_include_timestamp', '1'), '1'); ?>>
+                        <input type="text" id="excel_filename" name="excel_filename" value="<?php echo esc_attr(get_option('waitlist_excel_filename', 'lista-de-espera-{product_name}-{date}')); ?>" class="regular-text">
                         <p class="description">
-                            Añadir fecha y hora al nombre del archivo Excel exportado.
+                            Formato del nombre del archivo Excel. Puedes usar {product_name} para el nombre del producto y {date} para la fecha actual.
                         </p>
                     </td>
                 </tr>
@@ -144,6 +205,17 @@ if (!defined('ABSPATH')) {
             <table class="form-table">
                 <tr>
                     <th scope="row">
+                        <label for="enable_email_notifications">Activar notificaciones</label>
+                    </th>
+                    <td>
+                        <input type="checkbox" id="enable_email_notifications" name="enable_email_notifications" value="1" <?php checked(get_option('waitlist_enable_email_notifications', '1'), '1'); ?>>
+                        <p class="description">
+                            Activar/desactivar el envío automático de notificaciones cuando un producto vuelve a estar disponible.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">
                         <label for="email_subject">Asunto del correo</label>
                     </th>
                     <td>
@@ -182,14 +254,14 @@ if (!defined('ABSPATH')) {
         </p>
         
         <!-- Destacado del Producto -->
-        <div style="background-color: #f5f8ff; border-left: 4px solid #0066CC; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
-            <h3 style="color: #0066CC; margin: 0 0 10px 0; font-size: 20px;">{product_name}</h3>
+        <div style="background-color: #f5f8ff; border-left: 4px solid #D50000; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+            <h3 style="color: #D50000; margin: 0 0 10px 0; font-size: 20px;">{product_name}</h3>
             <p style="margin: 0; color: #666;">¡No esperes más para conseguirlo!</p>
         </div>
 
         <!-- Botón de Acción -->
         <div style="text-align: center; margin: 30px 0;">
-            <a href="{product_url}" style="display: inline-block; background-color: #0066CC; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px;">Ver Producto</a>
+            <a href="{product_url}" style="display: inline-block; background-color: #D50000; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 16px;">Ver Producto</a>
         </div>
 
         <p style="font-size: 14px; color: #666; margin-bottom: 0;">
@@ -212,7 +284,7 @@ if (!defined('ABSPATH')) {
             Fecha: {date}
         </p>
         <p style="margin: 5px 0 0 0;">
-            <a href="{store_url}" style="color: #0066CC; text-decoration: none;">Visitar nuestra tienda</a>
+            <a href="{store_url}" style="color: #D50000; text-decoration: none;">Visitar nuestra tienda</a>
         </p>
     </div>
 </div>';
@@ -302,7 +374,7 @@ if (!defined('ABSPATH')) {
                         <label for="email_color_header">Color de encabezado</label>
                     </th>
                     <td>
-                        <input type="color" id="email_color_header" name="email_color_header" value="<?php echo esc_attr(get_option('waitlist_email_color_header', '#0066CC')); ?>">
+                        <input type="color" id="email_color_header" name="email_color_header" value="<?php echo esc_attr(get_option('waitlist_email_color_header', '#D50000')); ?>">
                         <p class="description">
                             Color del encabezado en los correos electrónicos.
                         </p>
@@ -313,7 +385,7 @@ if (!defined('ABSPATH')) {
                         <label for="email_color_button">Color de botones</label>
                     </th>
                     <td>
-                        <input type="color" id="email_color_button" name="email_color_button" value="<?php echo esc_attr(get_option('waitlist_email_color_button', '#4CAF50')); ?>">
+                        <input type="color" id="email_color_button" name="email_color_button" value="<?php echo esc_attr(get_option('waitlist_email_color_button', '#D50000')); ?>">
                         <p class="description">
                             Color de los botones en los correos electrónicos.
                         </p>
@@ -339,6 +411,73 @@ if (!defined('ABSPATH')) {
                         <p class="description">
                             Dirección de correo electrónico del remitente.
                         </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">
+                        <label for="email_test">Enviar email de prueba</label>
+                    </th>
+                    <td>
+                        <input type="email" id="test_email_address" placeholder="Ingresa un correo para enviar prueba" class="regular-text">
+                        <button type="button" class="button button-secondary send-test-email">Enviar prueba</button>
+                        <p class="description">
+                            Envía un correo de prueba con la configuración actual para verificar que funciona correctamente.
+                        </p>
+                        <div id="test-email-result" style="margin-top: 10px; display: none;"></div>
+                        <script>
+                            jQuery(document).ready(function($) {
+                                $('.send-test-email').on('click', function() {
+                                    var testEmail = $('#test_email_address').val();
+                                    if (!testEmail || !testEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+                                        $('#test-email-result').html('<div class="notice notice-error inline"><p>Por favor, ingresa un correo electrónico válido.</p></div>').show();
+                                        return;
+                                    }
+                                    
+                                    $(this).prop('disabled', true).text('Enviando...');
+                                    $('#test-email-result').html('<div class="notice notice-info inline"><p>Enviando correo de prueba...</p></div>').show();
+                                    
+                                    // Recopilar datos del formulario para la plantilla del correo
+                                    var logo = $('#email_logo').val();
+                                    var header_color = $('#email_color_header').val();
+                                    var button_color = $('#email_color_button').val();
+                                    var subject = $('#email_subject').val();
+                                    var message = tinyMCE.get('email_message') ? tinyMCE.get('email_message').getContent() : $('#email_message').val();
+                                    var from_name = $('#email_from_name').val();
+                                    var from_email = $('#email_from_address').val();
+                                    
+                                    // Enviar solicitud AJAX
+                                    $.ajax({
+                                        url: ajaxurl,
+                                        type: 'POST',
+                                        data: {
+                                            action: 'waitlist_send_test_email',
+                                            email: testEmail,
+                                            subject: subject,
+                                            message: message,
+                                            logo: logo,
+                                            header_color: header_color,
+                                            button_color: button_color,
+                                            from_name: from_name,
+                                            from_email: from_email,
+                                            nonce: '<?php echo wp_create_nonce("waitlist_test_email"); ?>'
+                                        },
+                                        success: function(response) {
+                                            if (response.success) {
+                                                $('#test-email-result').html('<div class="notice notice-success inline"><p>' + response.data + '</p></div>');
+                                            } else {
+                                                $('#test-email-result').html('<div class="notice notice-error inline"><p>Error: ' + response.data + '</p></div>');
+                                            }
+                                        },
+                                        error: function() {
+                                            $('#test-email-result').html('<div class="notice notice-error inline"><p>Error al enviar la solicitud.</p></div>');
+                                        },
+                                        complete: function() {
+                                            $('.send-test-email').prop('disabled', false).text('Enviar prueba');
+                                        }
+                                    });
+                                });
+                            });
+                        </script>
                     </td>
                 </tr>
                 <tr>
@@ -428,6 +567,11 @@ if (!defined('ABSPATH')) {
             </table>
         </div>
         
+        <?php 
+        // Comprobar si la opción de ocultar migración está activa
+        $hide_migration = get_option('waitlist_hide_migration', '0');
+        if ($hide_migration !== '1'):
+        ?>
         <div class="waitlist-settings-section">
             <h2>Migración desde YITH WooCommerce Waitlist</h2>
             <p>Si estabas utilizando YITH WooCommerce Waitlist, puedes migrar los suscriptores a tu propio sistema con un solo clic.</p>
@@ -439,154 +583,111 @@ if (!defined('ABSPATH')) {
                 </p>
                 <p>La migración puede tomar tiempo dependiendo del número de suscriptores.</p>
                 
-                <a href="#" id="migrate-yith-link" class="button button-primary">Migrar datos desde YITH</a>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <a href="#" id="migrate-yith-link" class="button button-primary">Migrar datos desde YITH</a>
+                    <label><input type="checkbox" name="hide_migration" value="1"> Ocultar esta sección después de guardar</label>
+                </div>
             </div>
         </div>
+        <?php endif; ?>
         
         <div class="waitlist-settings-section">
             <h2>Opciones de Importación</h2>
-            <table class="form-table">
-                <tr>
-                    <th scope="row">
-                        <label for="import_file">Importar suscriptores desde CSV</label>
-                    </th>
-                    <td>
-                        <input type="file" id="import_file" name="import_file">
-                        <p class="description">
-                            Selecciona un archivo CSV con los suscriptores a importar. El archivo debe tener las columnas 'product_id' y 'email'.
-                        </p>
-                    </td>
-                </tr>
-            </table>
-            <p class="submit">
-                <input type="submit" name="import_subscribers" id="import_subscribers" class="button button-secondary" value="Importar Suscriptores">
-            </p>
+            <p>Importa suscriptores desde un archivo CSV.</p>
+            
+            <div class="waitlist-import-box">
+                <p>
+                    <strong>Formato del CSV:</strong> El archivo debe tener encabezados y contener las columnas <code>product_id</code>, <code>variation_id</code> (opcional, usar 0 si no aplica), y <code>email</code>.
+                </p>
+                <p>Ejemplo:</p>
+                <pre>product_id,variation_id,email
+123,456,cliente1@ejemplo.com
+123,0,cliente2@ejemplo.com</pre>
+                
+                <div class="import-form">
+                    <input type="file" id="csv-import-file" accept=".csv" />
+                    <button type="button" class="button button-secondary" id="import-csv-button">Importar CSV</button>
+                </div>
+                <div id="import-result" style="margin-top: 15px;"></div>
+                
+                <script>
+                    jQuery(document).ready(function($) {
+                        $('#import-csv-button').click(function() {
+                            var fileInput = $('#csv-import-file')[0];
+                            
+                            if (fileInput.files.length === 0) {
+                                $('#import-result').html('<div class="notice notice-error inline"><p>Por favor, selecciona un archivo CSV.</p></div>');
+                                return;
+                            }
+                            
+                            var file = fileInput.files[0];
+                            var formData = new FormData();
+                            formData.append('action', 'waitlist_import_csv');
+                            formData.append('csv_file', file);
+                            formData.append('nonce', '<?php echo wp_create_nonce("waitlist_import_csv"); ?>');
+                            
+                            $('#import-result').html('<div class="notice notice-info inline"><p>Importando suscriptores... Por favor, espera.</p></div>');
+                            
+                            $.ajax({
+                                url: ajaxurl,
+                                type: 'POST',
+                                data: formData,
+                                processData: false,
+                                contentType: false,
+                                success: function(response) {
+                                    if (response.success) {
+                                        $('#import-result').html('<div class="notice notice-success inline"><p>' + response.data + '</p></div>');
+                                    } else {
+                                        $('#import-result').html('<div class="notice notice-error inline"><p>Error: ' + response.data + '</p></div>');
+                                    }
+                                },
+                                error: function() {
+                                    $('#import-result').html('<div class="notice notice-error inline"><p>Ha ocurrido un error durante la importación.</p></div>');
+                                }
+                            });
+                        });
+                    });
+                </script>
+            </div>
         </div>
         
-        <p class="submit">
-            <input type="submit" name="submit" id="submit" class="button button-primary" value="Guardar Cambios">
-        </p>
+        <?php submit_button('Guardar Configuración'); ?>
     </form>
 </div>
 
-<style>
-    .waitlist-container {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-        max-width: 800px;
-    }
-    
-    .waitlist-settings-section {
-        background: #fff;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        padding: 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 1px 3px rgba(0,0,0,.1);
-    }
-    
-    .waitlist-settings-section h2 {
-        margin-top: 0;
-        padding-bottom: 10px;
-        border-bottom: 1px solid #eee;
-        color: #23282d;
-    }
-    
-    .color-picker {
-        width: 70px;
-        height: 30px;
-        padding: 0;
-        border: 1px solid #ddd;
-    }
-    
-    .waitlist-migration-box {
-        background-color: #f8f8f8;
-        border-left: 4px solid #0073aa;
-        padding: 15px;
-        margin-top: 10px;
-    }
-</style>
-
-<?php
-// Inicializar los selectores de color y media uploader
-wp_enqueue_script('wp-color-picker');
-wp_enqueue_style('wp-color-picker');
-wp_enqueue_media();
-?>
-
-<script type="text/javascript">
-jQuery(document).ready(function($) {
-    // Inicializar selectores de color
-    if ($.fn.wpColorPicker) {
-        $('.color-picker').wpColorPicker();
-    } else {
-        console.error('El plugin wpColorPicker no está disponible');
-    }
-    
-    // Asegurar que el contenido del editor se guarde antes de enviar
-    $('#waitlist-settings-form').on('submit', function(e) {
-        console.log('Formulario enviándose...');
+<script>
+    jQuery(document).ready(function($) {
+        // Inicializar pestañas si se decide agregar
         
-        // Si TinyMCE está activo, asegurarse de que el contenido se sincronice
-        if (typeof tinyMCE !== 'undefined') {
-            var editor = tinyMCE.get('email_message');
-            if (editor && !editor.isHidden()) {
-                editor.save(); // Sincroniza el contenido del editor con el textarea
-                console.log('Contenido del editor sincronizado');
-            } else {
-                console.log('Editor no encontrado o está en modo HTML');
+        // Para el enlace de migrar desde YITH
+        $('#migrate-yith-link').click(function(e) {
+            e.preventDefault();
+            
+            if (confirm('¿Estás seguro de que deseas migrar los datos desde YITH WooCommerce Waitlist? Este proceso puede tomar tiempo dependiendo del número de suscriptores.')) {
+                $(this).text('Migrando datos...').addClass('button-disabled');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'waitlist_migrate_from_yith',
+                        nonce: '<?php echo wp_create_nonce("waitlist_migrate_from_yith"); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('¡Migración completada con éxito! Se han migrado ' + response.data.count + ' suscriptores.');
+                        } else {
+                            alert('Error durante la migración: ' + response.data);
+                        }
+                    },
+                    error: function() {
+                        alert('Ha ocurrido un error durante la migración.');
+                    },
+                    complete: function() {
+                        $('#migrate-yith-link').text('Migrar datos desde YITH').removeClass('button-disabled');
+                    }
+                });
             }
-        }
-        
-        // Registrar los datos que se enviarán
-        var formData = $(this).serialize();
-        console.log('Datos del formulario:', formData);
+        });
     });
-    
-    // Verificar si hay un mensaje de guardado en la URL
-    var urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('message') === 'saved') {
-        // Mostrar un mensaje de éxito
-        $('<div class="notice notice-success is-dismissible"><p>La configuración se ha guardado correctamente.</p></div>')
-            .insertBefore('#waitlist-settings-form')
-            .delay(5000)
-            .fadeOut(function() {
-                $(this).remove();
-            });
-    }
-    
-    // Hacer que el enlace de migración funcione correctamente
-    $('#migrate-yith-link').on('click', function(e) {
-        e.preventDefault();
-        if (confirm('¿Estás seguro de que deseas migrar los datos desde YITH?')) {
-            var $form = $(
-                '<form method="post" action="">' +
-                '<input type="hidden" name="waitlist_migration_nonce" value="<?php echo wp_create_nonce("waitlist_migration"); ?>" />' +
-                '<input type="hidden" name="action" value="migrate_waitlist" />' +
-                '<input type="hidden" name="migrate_from_yith" value="1" />' +
-                '</form>'
-            );
-            $('body').append($form);
-            $form.submit();
-        }
-    });
-    
-    // Capturar clics en el botón de guardar para depuración
-    $('#submit').on('click', function() {
-        console.log('Botón de guardar presionado');
-    });
-});
 </script>
-
-<?php 
-// Manejo de errores y depuración
-if (defined('WP_DEBUG') && WP_DEBUG) {
-    // Mostrar errores PHP si estamos en modo debug
-    ini_set('display_errors', 1);
-    error_reporting(E_ALL);
-    
-    // Verificar si debemos mostrar un mensaje de error
-    if (isset($_GET['error'])) {
-        echo '<div class="notice notice-error"><p>Error: ' . esc_html($_GET['error']) . '</p></div>';
-    }
-}
-?>

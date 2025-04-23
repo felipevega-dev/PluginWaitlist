@@ -90,8 +90,20 @@
                 <div class="waitlist-product-details">
                     <h2><?php echo esc_html($parent_product->get_name()); ?></h2>
                     <p><strong>SKU:</strong> <?php echo $parent_product->get_sku() ? esc_html($parent_product->get_sku()) : 'N/A'; ?></p>
+                    <?php if (!empty($variations_only)): ?>
                     <p><strong>Total variaciones:</strong> <?php echo count($variations_only); ?></p>
                     <p><strong>Total suscriptores:</strong> <?php echo $total_subscribers; ?></p>
+                    <?php else: 
+                    // Para productos sin variaciones, obtener los suscriptores directos y contar los emails únicos
+                    $product_subscribers = Waitlist_Model::get_subscribers($parent_id);
+                    $unique_emails = array();
+                    foreach ($product_subscribers as $subscriber) {
+                        $unique_emails[$subscriber->email] = true;
+                    }
+                    $unique_count = count($unique_emails);
+                    ?>
+                    <p><strong>Total suscriptores únicos:</strong> <?php echo $unique_count; ?></p>
+                    <?php endif; ?>
                     <p>
                         <a href="<?php echo get_permalink($parent_id); ?>" target="_blank" class="button button-small">Ver en tienda</a>
                         <a href="<?php echo get_edit_post_link($parent_id); ?>" target="_blank" class="button button-small">Editar producto</a>
@@ -103,6 +115,91 @@
                 <div class="notice notice-warning">
                     <p>Este producto no tiene variaciones con suscriptores.</p>
                 </div>
+                
+                <?php
+                // Si no hay variaciones pero hay suscriptores directos al producto principal
+                $product_subscribers = Waitlist_Model::get_subscribers($parent_id);
+                if (!empty($product_subscribers)):
+                    // Agrupar por email y quedarse con la suscripción más reciente
+                    $unique_subscribers = array();
+                    foreach ($product_subscribers as $subscriber) {
+                        $timestamp = 0;
+                        if (is_numeric($subscriber->created_at) && $subscriber->created_at > 946684800) {
+                            $timestamp = $subscriber->created_at;
+                        } else if (strtotime($subscriber->created_at) > 946684800) {
+                            $timestamp = strtotime($subscriber->created_at);
+                        }
+                        
+                        if (!isset($unique_subscribers[$subscriber->email]) || 
+                            $timestamp > $unique_subscribers[$subscriber->email]['timestamp']) {
+                            $unique_subscribers[$subscriber->email] = array(
+                                'timestamp' => $timestamp,
+                                'created_at' => $subscriber->created_at,
+                                'id' => $subscriber->id
+                            );
+                        }
+                    }
+                    
+                    // Contar suscriptores únicos
+                    $unique_count = count($unique_subscribers);
+                ?>
+                <div class="waitlist-variation-group">
+                    <h3>Suscriptores para Producto de Talla Única</h3>
+                    
+                    <!-- Resumen de suscriptores -->
+                    <div class="waitlist-summary-chart">
+                        <table class="waitlist-excel-table">
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th class="num">Total Suscriptores Únicos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong><?php echo esc_html($parent_product->get_name()); ?></strong></td>
+                                    <td class="num"><strong><?php echo $unique_count; ?></strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Lista de correos electrónicos -->
+                    <h4 style="margin-top: 20px;">Correos Electrónicos (suscripción más reciente)</h4>
+                    <table class="waitlist-excel-table">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th width="180">Fecha de suscripción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            $row_count = 0;
+                            foreach ($unique_subscribers as $email => $data): 
+                                $row_class = ($row_count % 2 == 0) ? 'even-row' : '';
+                                $row_count++;
+                            ?>
+                                <tr class="<?php echo $row_class; ?>">
+                                    <td><?php echo esc_html($email); ?></td>
+                                    <td>
+                                        <?php 
+                                        // Formatear la fecha si está en timestamp Unix
+                                        if (is_numeric($data['created_at']) && $data['created_at'] > 946684800) {
+                                            echo date('Y-m-d H:i:s', $data['created_at']);
+                                        } else if (strtotime($data['created_at']) > 946684800) {
+                                            echo date('Y-m-d H:i:s', strtotime($data['created_at']));
+                                        } else {
+                                            echo 'Fecha no disponible';
+                                        }
+                                        ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
             <?php else: ?>
                 
                 <!-- Sección única de Tallas -->

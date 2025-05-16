@@ -18,37 +18,57 @@ class Waitlist_Admin {
         add_action('admin_post_waitlist_export_csv', 'waitlist_export_csv');
         
         // Registro de opciones para la configuración
-        $this->register_settings();
+        add_action('admin_init', array($this, 'register_settings'));
         
         // Inicializar valores predeterminados temprano
         add_action('admin_init', array($this, 'initialize_default_values'));
         
         // Agregar acción para procesar el formulario directamente
         add_action('admin_post_save_waitlist_settings', array($this, 'handle_form_submission'));
+        
+        // AJAX para email de prueba
+        add_action('wp_ajax_waitlist_send_test_email', array($this, 'send_test_email'));
+        
+        // AJAX para importar CSV
+        add_action('wp_ajax_waitlist_import_csv', array($this, 'import_csv'));
+        
+        // AJAX para migrar desde YITH
+        add_action('wp_ajax_waitlist_migrate_from_yith', array($this, 'migrate_from_yith'));
     }
     
     /**
      * Registra las opciones del plugin
      */
     public function register_settings() {
-        // Opciones de visualización
-        register_setting('waitlist_settings', 'waitlist_show_variation_count', 'sanitize_text_field');
-        register_setting('waitlist_settings', 'waitlist_show_subscriber_emails', 'sanitize_text_field');
-        register_setting('waitlist_settings', 'waitlist_max_emails_display', 'absint');
+        // Registrar el grupo de opciones
+        register_setting(
+            'waitlist_settings_group', // Option group
+            'waitlist_settings_group', // Option name
+            null // Sanitization callback
+        );
         
-        // Opciones de exportación
-        register_setting('waitlist_settings', 'waitlist_excel_header_color', 'sanitize_text_field');
-        register_setting('waitlist_settings', 'waitlist_excel_alternate_color', 'sanitize_text_field');
-        register_setting('waitlist_settings', 'waitlist_include_timestamp', 'sanitize_text_field');
+        // Opciones de visualización
+        register_setting('waitlist_settings_group', 'waitlist_max_emails_display', 'absint');
+        register_setting('waitlist_settings_group', 'waitlist_show_subscriber_count', 'sanitize_text_field');
+        
+        // Opciones de Excel
+        register_setting('waitlist_settings_group', 'waitlist_excel_logo', 'esc_url_raw');
+        register_setting('waitlist_settings_group', 'waitlist_excel_color_header', 'sanitize_hex_color');
+        register_setting('waitlist_settings_group', 'waitlist_excel_color_text', 'sanitize_hex_color');
+        register_setting('waitlist_settings_group', 'waitlist_excel_filename', 'sanitize_text_field');
         
         // Opciones de email
-        register_setting('waitlist_settings', 'waitlist_email_subject', 'wp_kses_post');
-        register_setting('waitlist_settings', 'waitlist_email_message', 'wp_kses_post');
-        register_setting('waitlist_settings', 'waitlist_email_logo', 'esc_url_raw');
-        register_setting('waitlist_settings', 'waitlist_email_color_header', 'sanitize_hex_color');
-        register_setting('waitlist_settings', 'waitlist_email_color_button', 'sanitize_hex_color');
-        register_setting('waitlist_settings', 'waitlist_email_from_name', 'sanitize_text_field');
-        register_setting('waitlist_settings', 'waitlist_email_from_address', 'sanitize_email');
+        register_setting('waitlist_settings_group', 'waitlist_enable_email_notifications', 'sanitize_text_field');
+        register_setting('waitlist_settings_group', 'waitlist_email_subject', 'wp_kses_post');
+        register_setting('waitlist_settings_group', 'waitlist_email_message', 'wp_kses_post');
+        register_setting('waitlist_settings_group', 'waitlist_email_logo', 'esc_url_raw');
+        register_setting('waitlist_settings_group', 'waitlist_email_color_header', 'sanitize_hex_color');
+        register_setting('waitlist_settings_group', 'waitlist_email_color_button', 'sanitize_hex_color');
+        register_setting('waitlist_settings_group', 'waitlist_email_from_name', 'sanitize_text_field');
+        register_setting('waitlist_settings_group', 'waitlist_email_from_address', 'sanitize_email');
+        
+        // Opción de ocultar migración
+        register_setting('waitlist_settings_group', 'waitlist_hide_migration', 'sanitize_text_field');
     }
     
     /**
@@ -224,25 +244,33 @@ class Waitlist_Admin {
             exit;
         }
         
-        // Guardar las opciones
-        update_option('waitlist_show_variation_count', isset($_POST['show_variation_count']) ? '1' : '0');
-        update_option('waitlist_show_subscriber_emails', isset($_POST['show_subscriber_emails']) ? '1' : '0');
-        update_option('waitlist_max_emails_display', absint($_POST['max_emails_display']));
-        update_option('waitlist_excel_header_color', sanitize_text_field($_POST['excel_header_color']));
-        update_option('waitlist_excel_alternate_color', sanitize_text_field($_POST['excel_alternate_color']));
-        update_option('waitlist_include_timestamp', isset($_POST['include_timestamp']) ? '1' : '0');
-        update_option('waitlist_email_subject', wp_kses_post($_POST['email_subject']));
+        // Configuración General
+        update_option('waitlist_max_emails_display', isset($_POST['max_emails_display']) ? absint($_POST['max_emails_display']) : 50);
+        update_option('waitlist_show_subscriber_count', isset($_POST['show_subscriber_count']) ? '1' : '0');
+        
+        // Configuración de Excel
+        update_option('waitlist_excel_logo', isset($_POST['excel_logo']) ? esc_url_raw($_POST['excel_logo']) : '');
+        update_option('waitlist_excel_color_header', isset($_POST['excel_color_header']) ? sanitize_hex_color($_POST['excel_color_header']) : '#D50000');
+        update_option('waitlist_excel_color_text', isset($_POST['excel_color_text']) ? sanitize_hex_color($_POST['excel_color_text']) : '#FFFFFF');
+        update_option('waitlist_excel_filename', isset($_POST['excel_filename']) ? sanitize_text_field($_POST['excel_filename']) : 'lista-de-espera-{product_name}-{date}');
+        
+        // Configuración de Email
+        update_option('waitlist_enable_email_notifications', isset($_POST['enable_email_notifications']) ? '1' : '0');
+        update_option('waitlist_email_subject', isset($_POST['email_subject']) ? wp_kses_post($_POST['email_subject']) : '');
         
         // Guardar mensaje de email si está presente
         if (isset($_POST['email_message'])) {
             update_option('waitlist_email_message', wp_kses_post($_POST['email_message']));
         }
         
-        update_option('waitlist_email_logo', esc_url_raw($_POST['email_logo']));
-        update_option('waitlist_email_color_header', sanitize_hex_color($_POST['email_color_header']));
-        update_option('waitlist_email_color_button', sanitize_hex_color($_POST['email_color_button']));
-        update_option('waitlist_email_from_name', sanitize_text_field($_POST['email_from_name']));
-        update_option('waitlist_email_from_address', sanitize_email($_POST['email_from_address']));
+        update_option('waitlist_email_logo', isset($_POST['email_logo']) ? esc_url_raw($_POST['email_logo']) : '');
+        update_option('waitlist_email_color_header', isset($_POST['email_color_header']) ? sanitize_hex_color($_POST['email_color_header']) : '#D50000');
+        update_option('waitlist_email_color_button', isset($_POST['email_color_button']) ? sanitize_hex_color($_POST['email_color_button']) : '#D50000');
+        update_option('waitlist_email_from_name', isset($_POST['email_from_name']) ? sanitize_text_field($_POST['email_from_name']) : get_bloginfo('name'));
+        update_option('waitlist_email_from_address', isset($_POST['email_from_address']) ? sanitize_email($_POST['email_from_address']) : get_bloginfo('admin_email'));
+        
+        // Opción de migración
+        update_option('waitlist_hide_migration', isset($_POST['hide_migration']) ? '1' : '0');
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('Waitlist - Configuración guardada correctamente');
@@ -252,7 +280,7 @@ class Waitlist_Admin {
         wp_redirect(add_query_arg(
             array(
                 'page' => 'waitlist-settings',
-                'message' => 'saved',
+                'settings-updated' => 'true',
             ),
             admin_url('admin.php')
         ));
@@ -419,13 +447,9 @@ class Waitlist_Admin {
         $this->initialize_default_values();
         
         // Verificar si se está mostrando después de una redirección
-        if (isset($_GET['message']) && $_GET['message'] === 'saved') {
-            add_settings_error(
-                'waitlist_messages',
-                'waitlist_message',
-                'La configuración se ha guardado correctamente.',
-                'updated'
-            );
+        $settings_updated = false;
+        if (isset($_GET['settings-updated']) && $_GET['settings-updated'] == 'true') {
+            $settings_updated = true;
         }
         
         // Verificar si hay errores
@@ -444,9 +468,6 @@ class Waitlist_Admin {
             );
         }
         
-        // Procesar el formulario si se envió (método antiguo)
-        $this->process_settings_form();
-        
         // Mostrar mensajes de error/éxito
         settings_errors('waitlist_messages');
         
@@ -460,5 +481,356 @@ class Waitlist_Admin {
     public function render_about_page() {
         // Incluir la plantilla
         include WAITLIST_PLUGIN_DIR . 'includes/admin/views/about-page.php';
+    }
+    
+    /**
+     * Envía un correo electrónico de prueba
+     */
+    public function send_test_email() {
+        // Verificar nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'waitlist_test_email')) {
+            wp_send_json_error('Error de seguridad. Por favor, recarga la página e intenta de nuevo.');
+            return;
+        }
+        
+        // Verificar dirección de correo
+        if (!isset($_POST['email']) || !is_email($_POST['email'])) {
+            wp_send_json_error('Por favor, ingresa una dirección de correo electrónico válida.');
+            return;
+        }
+        
+        $to = sanitize_email($_POST['email']);
+        $subject = isset($_POST['subject']) ? sanitize_text_field($_POST['subject']) : '¡Producto de prueba ya está disponible!';
+        $message = isset($_POST['message']) ? wp_kses_post($_POST['message']) : 'Este es un mensaje de prueba.';
+        
+        // Obtener opciones de personalización
+        $logo_url = isset($_POST['logo']) ? esc_url_raw($_POST['logo']) : '';
+        $header_color = isset($_POST['header_color']) ? sanitize_hex_color($_POST['header_color']) : '#D50000';
+        $button_color = isset($_POST['button_color']) ? sanitize_hex_color($_POST['button_color']) : '#D50000';
+        $from_name = isset($_POST['from_name']) ? sanitize_text_field($_POST['from_name']) : get_bloginfo('name');
+        $from_email = isset($_POST['from_email']) ? sanitize_email($_POST['from_email']) : get_option('admin_email');
+        
+        // Reemplazar variables de muestra
+        $store_name = get_bloginfo('name');
+        $store_url = get_bloginfo('url');
+        $date = date_i18n(get_option('date_format'));
+        
+        $subject = str_replace(
+            array('{product_name}', '{product_url}', '{store_name}', '{store_url}', '{customer_email}', '{date}'),
+            array('Producto de Prueba', $store_url, $store_name, $store_url, $to, $date),
+            $subject
+        );
+        
+        $message = str_replace(
+            array('{product_name}', '{product_url}', '{store_name}', '{store_url}', '{customer_email}', '{date}'),
+            array('Producto de Prueba', $store_url, $store_name, $store_url, $to, $date),
+            $message
+        );
+        
+        // Crear plantilla de correo con HTML y CSS
+        $email_template = '
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+            <title>' . esc_html($subject) . '</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    margin: 0;
+                    padding: 0;
+                    color: #333333;
+                }
+                .email-container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    border: 1px solid #dddddd;
+                    border-radius: 8px;
+                    overflow: hidden;
+                }
+                .email-header {
+                    background-color: ' . $header_color . ';
+                    color: white;
+                    padding: 20px;
+                    text-align: center;
+                }
+                .logo-container {
+                    text-align: center;
+                    margin-bottom: 10px;
+                }
+                .logo {
+                    max-width: 150px;
+                    height: auto;
+                }
+                .email-body {
+                    padding: 30px 20px;
+                    background-color: #ffffff;
+                }
+                .email-footer {
+                    background-color: #f7f7f7;
+                    padding: 15px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #888888;
+                }
+                .button {
+                    display: inline-block;
+                    background-color: ' . $button_color . ';
+                    color: white;
+                    text-decoration: none;
+                    padding: 12px 25px;
+                    border-radius: 4px;
+                    margin-top: 20px;
+                    margin-bottom: 20px;
+                    font-weight: bold;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="email-container">
+                <div class="email-header">
+                    ' . ($logo_url ? '<div class="logo-container"><img src="' . esc_url($logo_url) . '" alt="' . esc_attr($store_name) . '" class="logo"></div>' : '') . '
+                    <h1>' . esc_html($store_name) . '</h1>
+                </div>
+                <div class="email-body">
+                    ' . $message . '
+                </div>
+                <div class="email-footer">
+                    &copy; ' . date('Y') . ' ' . esc_html($store_name) . '. Todos los derechos reservados.
+                </div>
+            </div>
+        </body>
+        </html>';
+        
+        // Configurar encabezados del correo
+        $headers = array(
+            'Content-Type: text/html; charset=UTF-8',
+            'From: ' . $from_name . ' <' . $from_email . '>'
+        );
+        
+        // Enviar correo
+        $sent = wp_mail($to, $subject, $email_template, $headers);
+        
+        if ($sent) {
+            wp_send_json_success('Correo de prueba enviado correctamente a ' . $to);
+        } else {
+            wp_send_json_error('No se pudo enviar el correo de prueba. Por favor, verifica la configuración de tu servidor de correo.');
+        }
+    }
+    
+    /**
+     * Importa suscriptores desde un archivo CSV
+     */
+    public function import_csv() {
+        // Verificar nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'waitlist_import_csv')) {
+            wp_send_json_error('Error de seguridad. Por favor, recarga la página e intenta de nuevo.');
+            return;
+        }
+        
+        // Verificar archivo
+        if (!isset($_FILES['csv_file']) || empty($_FILES['csv_file']['tmp_name'])) {
+            wp_send_json_error('No se ha enviado ningún archivo CSV.');
+            return;
+        }
+        
+        $file = $_FILES['csv_file']['tmp_name'];
+        
+        // Verificar que el archivo sea un CSV
+        $file_info = pathinfo($_FILES['csv_file']['name']);
+        if (strtolower($file_info['extension']) !== 'csv') {
+            wp_send_json_error('El archivo debe ser un CSV válido.');
+            return;
+        }
+        
+        // Abrir el archivo
+        $handle = fopen($file, 'r');
+        if (!$handle) {
+            wp_send_json_error('No se pudo abrir el archivo CSV.');
+            return;
+        }
+        
+        // Leer la primera línea para obtener los encabezados
+        $headers = fgetcsv($handle);
+        
+        // Verificar que los encabezados necesarios estén presentes
+        $required_headers = array('product_id', 'email');
+        foreach ($required_headers as $required) {
+            if (!in_array($required, $headers)) {
+                fclose($handle);
+                wp_send_json_error('El archivo CSV debe contener las columnas "product_id" y "email".');
+                return;
+            }
+        }
+        
+        // Índices de las columnas
+        $product_id_index = array_search('product_id', $headers);
+        $email_index = array_search('email', $headers);
+        $variation_id_index = array_search('variation_id', $headers);
+        
+        // Preparar para insertar en la base de datos
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'waitlist';
+        
+        $imported = 0;
+        $errors = 0;
+        
+        // Procesar cada línea
+        while (($data = fgetcsv($handle)) !== false) {
+            // Verificar que haya suficientes columnas
+            if (count($data) < 2) {
+                $errors++;
+                continue;
+            }
+            
+            $product_id = intval($data[$product_id_index]);
+            $email = sanitize_email($data[$email_index]);
+            $variation_id = ($variation_id_index !== false && isset($data[$variation_id_index])) ? intval($data[$variation_id_index]) : 0;
+            
+            // Validar datos
+            if ($product_id <= 0 || !is_email($email)) {
+                $errors++;
+                continue;
+            }
+            
+            // Si hay un ID de variación, usar ese como product_id
+            $target_id = ($variation_id > 0) ? $variation_id : $product_id;
+            
+            // Verificar si el producto existe
+            $product = wc_get_product($target_id);
+            if (!$product) {
+                $errors++;
+                continue;
+            }
+            
+            // Verificar si el email ya está suscrito a este producto
+            $existing = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM $table_name WHERE product_id = %d AND email = %s",
+                $target_id,
+                $email
+            ));
+            
+            if ($existing > 0) {
+                // Ya existe, no duplicar
+                continue;
+            }
+            
+            // Insertar en la base de datos
+            $result = $wpdb->insert(
+                $table_name,
+                array(
+                    'product_id' => $target_id,
+                    'email' => $email,
+                    'created_at' => current_time('mysql')
+                ),
+                array('%d', '%s', '%s')
+            );
+            
+            if ($result) {
+                $imported++;
+            } else {
+                $errors++;
+            }
+        }
+        
+        fclose($handle);
+        
+        if ($imported > 0) {
+            wp_send_json_success('Importación completada. Se importaron ' . $imported . ' suscriptores' . ($errors > 0 ? ' con ' . $errors . ' errores.' : '.'));
+        } else {
+            wp_send_json_error('No se importaron suscriptores. Verifique el formato del archivo CSV y que los datos sean válidos.');
+        }
+    }
+    
+    /**
+     * Migra suscriptores desde YITH WooCommerce Waitlist
+     */
+    public function migrate_from_yith() {
+        // Verificar nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'waitlist_migrate_from_yith')) {
+            wp_send_json_error('Error de seguridad. Por favor, recarga la página e intenta de nuevo.');
+            return;
+        }
+        
+        // Verificar si YITH WooCommerce Waitlist está activo
+        if (!class_exists('YITH_WCWTL')) {
+            wp_send_json_error('YITH WooCommerce Waitlist no está instalado o activado.');
+            return;
+        }
+        
+        global $wpdb;
+        $our_table = $wpdb->prefix . 'waitlist';
+        
+        // Consultar productos con lista de espera en YITH
+        $products_query = "
+            SELECT post_id 
+            FROM {$wpdb->postmeta} 
+            WHERE meta_key = '_yith_wcwtl_users' 
+            AND meta_value != '' 
+            AND meta_value != 'a:0:{}'
+        ";
+        
+        $products = $wpdb->get_col($products_query);
+        
+        if (empty($products)) {
+            wp_send_json_error('No se encontraron suscriptores para migrar desde YITH WooCommerce Waitlist.');
+            return;
+        }
+        
+        $migrated = 0;
+        
+        foreach ($products as $product_id) {
+            // Obtener suscriptores de YITH
+            $subscribers = get_post_meta($product_id, '_yith_wcwtl_users', true);
+            
+            if (empty($subscribers) || !is_array($subscribers)) {
+                continue;
+            }
+            
+            foreach ($subscribers as $user_id) {
+                // Obtener email del usuario
+                $user_info = get_userdata($user_id);
+                
+                if (!$user_info || empty($user_info->user_email)) {
+                    continue;
+                }
+                
+                $email = $user_info->user_email;
+                
+                // Verificar si ya existe esta suscripción
+                $existing = $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM $our_table WHERE product_id = %d AND email = %s",
+                    $product_id,
+                    $email
+                ));
+                
+                if ($existing > 0) {
+                    // Ya existe, no duplicar
+                    continue;
+                }
+                
+                // Insertar en nuestra tabla
+                $result = $wpdb->insert(
+                    $our_table,
+                    array(
+                        'product_id' => $product_id,
+                        'email' => $email,
+                        'created_at' => current_time('mysql')
+                    ),
+                    array('%d', '%s', '%s')
+                );
+                
+                if ($result) {
+                    $migrated++;
+                }
+            }
+        }
+        
+        if ($migrated > 0) {
+            wp_send_json_success(['count' => $migrated, 'message' => 'Migración completada con éxito. Se migraron ' . $migrated . ' suscriptores.']);
+        } else {
+            wp_send_json_error('No se pudo migrar ningún suscriptor. Verifica que haya datos disponibles en YITH WooCommerce Waitlist.');
+        }
     }
 }

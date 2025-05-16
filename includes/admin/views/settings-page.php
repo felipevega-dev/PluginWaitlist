@@ -3,12 +3,6 @@
 if (!defined('ABSPATH')) {
     exit;
 }
-
-// Comprobar si se han guardado las opciones
-$settings_updated = false;
-if (isset($_GET['settings-updated']) && $_GET['settings-updated'] == 'true') {
-    $settings_updated = true;
-}
 ?>
 
 <div class="wrap">
@@ -18,10 +12,13 @@ if (isset($_GET['settings-updated']) && $_GET['settings-updated'] == 'true') {
         <div class="notice notice-success is-dismissible">
             <p>¡Configuración guardada con éxito!</p>
         </div>
+    <?php else: ?>
+        <?php settings_errors('waitlist_messages'); ?>
     <?php endif; ?>
     
-    <form method="post" action="options.php">
-        <?php settings_fields('waitlist_settings_group'); ?>
+    <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
+        <input type="hidden" name="action" value="save_waitlist_settings">
+        <?php wp_nonce_field('waitlist_settings', 'waitlist_settings_nonce'); ?>
         
         <div class="waitlist-settings-section">
             <h2>Configuración General</h2>
